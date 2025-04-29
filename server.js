@@ -28,7 +28,8 @@ app.get('/api/anime', async (req, res) => {
   res.json(data);
 });
 
-app.listen(3000, () => console.log('Servidor en http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
 
 app.get('/api/episode', async (req, res) => {
   const url = req.query.url;
