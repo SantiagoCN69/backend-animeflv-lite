@@ -69,3 +69,30 @@ app.get('/api/episode', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener el video' });
   }
 });
+
+app.get('/api/next-episode', async (req, res) => {
+  const { id, episodio } = req.query;
+  const info = await getAnimeInfo(id);
+  const epNum = parseInt(episodio);
+  const next = info.episodes[epNum]; // El siguiente está en la posición actual + 1
+
+  if (!next) return res.status(404).json({ error: 'No hay siguiente episodio' });
+
+  try {
+    const resp = await axios.get(next.url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const match = resp.data.match(/var videos = ({.*?});/s);
+    if (!match) return res.status(404).json({ error: 'No se encontró la variable de videos' });
+
+    const videosObj = JSON.parse(match[1]);
+    const servidores = (videosObj.SUB || []).map(srv => srv.code);
+    if (!servidores.length) return res.status(404).json({ error: 'No se encontraron servidores' });
+
+    return res.json({ servidores });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Error al obtener el siguiente capítulo' });
+  }
+});
+
