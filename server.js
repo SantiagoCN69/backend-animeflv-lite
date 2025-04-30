@@ -3,7 +3,6 @@ const cors = require('cors');
 const app = express();
 const { getLatest, searchAnime, getAnimeInfo } = require('animeflv-api');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const fs = require('fs');
 
 app.use(cors());
@@ -28,27 +27,39 @@ app.get('/api/anime', async (req, res) => {
   res.json(data);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
+// Obtener solo la lista de episodios de un anime
+app.get('/api/episodes', async (req, res) => {
+  const id = req.query.id;
+  try {
+    const data = await getAnimeInfo(id);
+    res.json({ episodes: data.episodes });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener episodios' });
+  }
+});
 
+// Obtener los enlaces de video de un episodio
 app.get('/api/episode', async (req, res) => {
   const url = req.query.url;
   if (!url) {
     return res.status(400).json({ error: 'Falta el parámetro url' });
   }
+
   try {
     const resp = await axios.get(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
+
     fs.writeFileSync('debug_animeflv.html', resp.data);
     console.log('HTML guardado en debug_animeflv.html');
-  
-    // Buscar la variable "var videos = ..." en el HTML
+
+    // Buscar la variable "var videos = {...};"
     const videosMatch = resp.data.match(/var videos = ({.*?});/s);
     if (!videosMatch) {
       return res.status(404).json({ error: 'No se encontró la variable de videos' });
     }
-  
+
     let servidores = [];
     try {
       const videosObj = JSON.parse(videosMatch[1]);
@@ -58,41 +69,18 @@ app.get('/api/episode', async (req, res) => {
     } catch (e) {
       return res.status(500).json({ error: 'Error al parsear los videos' });
     }
-  
+
     if (servidores.length === 0) {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
+
     return res.json({ video: servidores[0], servidores });
-  }
-  catch (error) {
+  } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener el video' });
   }
 });
 
-app.get('/api/next-episode', async (req, res) => {
-  const { id, episodio } = req.query;
-  const info = await getAnimeInfo(id);
-  const epNum = parseInt(episodio);
-  const next = info.episodes[epNum]; // El siguiente está en la posición actual + 1
-
-  if (!next) return res.status(404).json({ error: 'No hay siguiente episodio' });
-
-  try {
-    const resp = await axios.get(next.url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    const match = resp.data.match(/var videos = ({.*?});/s);
-    if (!match) return res.status(404).json({ error: 'No se encontró la variable de videos' });
-
-    const videosObj = JSON.parse(match[1]);
-    const servidores = (videosObj.SUB || []).map(srv => srv.code);
-    if (!servidores.length) return res.status(404).json({ error: 'No se encontraron servidores' });
-
-    return res.json({ servidores });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: 'Error al obtener el siguiente capítulo' });
-  }
-});
-
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
