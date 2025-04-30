@@ -51,9 +51,6 @@ app.get('/api/episode', async (req, res) => {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
 
-    fs.writeFileSync('debug_animeflv.html', resp.data);
-    console.log('HTML guardado en debug_animeflv.html');
-
     // Buscar la variable "var videos = {...};"
     const videosMatch = resp.data.match(/var videos = ({.*?});/s);
     if (!videosMatch) {
