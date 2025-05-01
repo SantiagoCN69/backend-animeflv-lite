@@ -77,19 +77,6 @@ app.get('/api/episode', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener el video' });
   }
 });
-
-// Detalles de anime
-app.get('/api/anime', async (req, res) => {
-  const id = req.query.id;
-  const data = await getAnimeInfo(id);
-  
-  // Extraer banner de la información del anime
-  if (data.cover) {
-    data.banner = data.cover.replace('/covers/', '/banners/').replace('.jpg', '_banner.jpg');
-  }
-  
-  res.json(data);
-});
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
