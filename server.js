@@ -3,8 +3,9 @@ const cors = require('cors');
 const app = express();
 const { getLatest, searchAnime, getAnimeInfo } = require('animeflv-api');
 const axios = require('axios');
-const puppeteer = require('puppeteer');
 const fs = require('fs');
+const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 
 app.use(cors());
 
@@ -40,20 +41,46 @@ app.get('/api/episodes', async (req, res) => {
   }
 });
 
-// Función para detectar si un servidor requiere scraping
-function requiereScraping(url) {
-  const dominios = [
-    'yourupload.com',
-    'uqload.com',
-    'streamtape.com',
-    'ok.ru',
-    'filemoon.sx',
-    'dood',
-    'sendvid',
-    'sbembed',
-    'streamsb'
-  ];
-  return dominios.some(d => url.includes(d));
+// Función para extraer link directo de video
+async function extractDirectVideoLink(embedUrl) {
+  const browser = await puppeteer.launch({ headless: true });
+  const page = await browser.newPage();
+  
+  try {
+    await page.goto(embedUrl, { waitUntil: 'networkidle0' });
+    
+    // Intenta diferentes estrategias para encontrar el link directo
+    const videoLink = await page.evaluate(() => {
+      // Buscar elementos de video
+      const videoElements = [
+        document.querySelector('video source'),
+        document.querySelector('video'),
+        document.querySelector('iframe[src*=".mp4"]'),
+      ];
+
+      for (let el of videoElements) {
+        if (el) {
+          return el.src || el.currentSrc;
+        }
+      }
+
+      // Si no encuentra, buscar en scripts
+      const scripts = Array.from(document.scripts);
+      for (let script of scripts) {
+        const match = script.textContent.match(/https?:.*\.mp4/);
+        if (match) return match[0];
+      }
+
+      return null;
+    });
+
+    await browser.close();
+    return videoLink;
+  } catch (error) {
+    console.error('Error extrayendo link directo:', error);
+    await browser.close();
+    return null;
+  }
 }
 
 // Obtener los enlaces de video de un episodio
@@ -88,43 +115,19 @@ app.get('/api/episode', async (req, res) => {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
 
-    // Buscar el primer servidor que se pueda scrapear
-    for (const serverUrl of servidores) {
-      if (requiereScraping(serverUrl)) {
-        try {
-          const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-          });
-          
-          const page = await browser.newPage();
-          await page.goto(serverUrl, { waitUntil: 'networkidle2' });
+    // Extraer link directo del primer servidor
+    const directVideoLink = await extractDirectVideoLink(servidores[0]);
 
-          const videoUrl = await page.evaluate(() => {
-            const video = document.querySelector('video');
-            return video ? video.src : null;
-          });
-
-          await browser.close();
-
-          if (videoUrl) {
-            return res.json({ video: videoUrl, servidores });
-          }
-        } catch (err) {
-          console.error(`Error scraping ${serverUrl}`, err);
-          // Sigue con el siguiente servidor
-        }
-      }
-    }
-
-    // Si no se encontró un link directo, usar el primero
-    return res.json({ video: servidores[0], servidores });
+    return res.json({
+      video: servidores[0],
+      directLink: directVideoLink,
+      servidores
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener el video' });
   }
 });
-
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
