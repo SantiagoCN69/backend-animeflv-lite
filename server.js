@@ -4,8 +4,6 @@ const app = express();
 const { getLatest, searchAnime, getAnimeInfo } = require('animeflv-api');
 const axios = require('axios');
 const fs = require('fs');
-const cheerio = require('cheerio');
-const puppeteer = require('puppeteer');
 
 app.use(cors());
 
@@ -43,42 +41,28 @@ app.get('/api/episodes', async (req, res) => {
 
 // Función para extraer link directo de video
 async function extractDirectVideoLink(embedUrl) {
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
-  
   try {
-    await page.goto(embedUrl, { waitUntil: 'networkidle0' });
-    
-    // Intenta diferentes estrategias para encontrar el link directo
-    const videoLink = await page.evaluate(() => {
-      // Buscar elementos de video
-      const videoElements = [
-        document.querySelector('video source'),
-        document.querySelector('video'),
-        document.querySelector('iframe[src*=".mp4"]'),
-      ];
-
-      for (let el of videoElements) {
-        if (el) {
-          return el.src || el.currentSrc;
-        }
-      }
-
-      // Si no encuentra, buscar en scripts
-      const scripts = Array.from(document.scripts);
-      for (let script of scripts) {
-        const match = script.textContent.match(/https?:.*\.mp4/);
-        if (match) return match[0];
-      }
-
-      return null;
+    const response = await axios.get(embedUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      maxRedirects: 5
     });
 
-    await browser.close();
-    return videoLink;
+    // Buscar links de video usando regex
+    const videoLinkMatches = [
+      response.data.match(/https?:\/\/[^\s"']+\.mp4/i),
+      response.data.match(/https?:\/\/[^\s"']+\/video\/[^\s"']+/i),
+      response.data.match(/file:\s*["']([^"']+\.mp4)["']/i)
+    ];
+
+    for (let match of videoLinkMatches) {
+      if (match) {
+        return match[1] || match[0];
+      }
+    }
+
+    return null;
   } catch (error) {
     console.error('Error extrayendo link directo:', error);
-    await browser.close();
     return null;
   }
 }
