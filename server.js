@@ -39,34 +39,6 @@ app.get('/api/episodes', async (req, res) => {
   }
 });
 
-// Función para extraer link directo de video
-async function extractDirectVideoLink(embedUrl) {
-  try {
-    const response = await axios.get(embedUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      maxRedirects: 5
-    });
-
-    // Buscar links de video usando regex
-    const videoLinkMatches = [
-      response.data.match(/https?:\/\/[^\s"']+\.mp4/i),
-      response.data.match(/https?:\/\/[^\s"']+\/video\/[^\s"']+/i),
-      response.data.match(/file:\s*["']([^"']+\.mp4)["']/i)
-    ];
-
-    for (let match of videoLinkMatches) {
-      if (match) {
-        return match[1] || match[0];
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error extrayendo link directo:', error);
-    return null;
-  }
-}
-
 // Obtener los enlaces de video de un episodio
 app.get('/api/episode', async (req, res) => {
   const url = req.query.url;
@@ -99,14 +71,7 @@ app.get('/api/episode', async (req, res) => {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
 
-    // Extraer link directo del primer servidor
-    const directVideoLink = await extractDirectVideoLink(servidores[0]);
-
-    return res.json({
-      video: servidores[0],
-      directLink: directVideoLink,
-      servidores
-    });
+    return res.json({ video: servidores[0], servidores });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener el video' });
