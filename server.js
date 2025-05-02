@@ -92,7 +92,11 @@ app.get('/api/episode', async (req, res) => {
     for (const serverUrl of servidores) {
       if (requiereScraping(serverUrl)) {
         try {
-          const browser = await puppeteer.launch({ headless: 'new' });
+          const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+          });
+          
           const page = await browser.newPage();
           await page.goto(serverUrl, { waitUntil: 'networkidle2' });
 
