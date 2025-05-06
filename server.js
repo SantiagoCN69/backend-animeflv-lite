@@ -14,11 +14,24 @@ app.get('/api/latest', async (req, res) => {
 });
 
 // Buscar anime
-app.get('/api/search', async (req, res) => {
-  const query = req.query.q;
-  const data = await searchAnime(query);
+app.get('/api/anime', async (req, res) => {
+  const id = req.query.id;
+  const data = await getAnimeInfo(id);
   res.json(data);
 });
+
+// Obtener animes relacionados
+app.get('/api/related', async (req, res) => {
+  const id = req.query.id;
+  try {
+    const data = await getAnimeInfo(id);
+    res.json({ related: data.relations || [] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener animes relacionados' });
+  }
+});
+
 
 // Detalles de anime
 app.get('/api/anime', async (req, res) => {
