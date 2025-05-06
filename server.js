@@ -14,6 +14,13 @@ app.get('/api/latest', async (req, res) => {
 });
 
 // Buscar anime
+app.get('/api/search', async (req, res) => {
+  const query = req.query.q;
+  const data = await searchAnime(query);
+  res.json(data);
+});
+
+// Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
   const data = await getAnimeInfo(id);
@@ -63,6 +70,7 @@ app.get('/api/episode', async (req, res) => {
     if (servidores.length === 0) {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
+
     return res.json({ video: servidores[0], servidores });
   } catch (error) {
     console.error(error);
