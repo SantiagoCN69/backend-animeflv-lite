@@ -20,26 +20,6 @@ app.get('/api/anime', async (req, res) => {
   res.json(data);
 });
 
-// Obtener animes relacionados
-app.get('/api/related', async (req, res) => {
-  const id = req.query.id;
-  try {
-    const data = await getAnimeInfo(id);
-    res.json({ related: data.relations || [] });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener animes relacionados' });
-  }
-});
-
-
-// Detalles de anime
-app.get('/api/anime', async (req, res) => {
-  const id = req.query.id;
-  const data = await getAnimeInfo(id);
-  res.json(data);
-});
-
 // Obtener solo la lista de episodios de un anime
 app.get('/api/episodes', async (req, res) => {
   const id = req.query.id;
@@ -84,6 +64,7 @@ app.get('/api/episode', async (req, res) => {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
 
+    console.log("Lista de servidores:", servidores); // Agregado para depuración
     return res.json({ video: servidores[0], servidores });
   } catch (error) {
     console.error(error);
