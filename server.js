@@ -63,42 +63,12 @@ app.get('/api/episode', async (req, res) => {
     if (servidores.length === 0) {
       return res.status(404).json({ error: 'No se encontraron links de video' });
     }
-
-    console.log("Lista de servidores:", servidores); // Agregado para depuración
     return res.json({ video: servidores[0], servidores });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener el video' });
   }
 });
-
-app.get('/api/extract-video', async (req, res) => {
-  const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'Falta el parámetro url' });
-
-  try {
-    const response = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-
-    const html = response.data;
-    const videoMatch = html.match(/<video[^>]+src="([^"]+)"/) || html.match(/source[^>]+src="([^"]+)"/);
-    const iframeMatch = html.match(/<iframe[^>]+src="([^"]+)"/);
-
-    if (videoMatch) {
-      return res.json({ tipo: 'video', url: videoMatch[1] });
-    } else if (iframeMatch) {
-      return res.json({ tipo: 'iframe', url: iframeMatch[1] });
-    } else {
-      return res.status(404).json({ error: 'No se encontró video embebido' });
-    }
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Error al escanear el HTML' });
-  }
-});
-
-
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
