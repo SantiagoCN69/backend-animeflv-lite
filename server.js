@@ -25,10 +25,12 @@ app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
   try {
     const data = await getAnimeInfo(id);
+    console.log(`[DEBUG /api/anime] ID: ${id}, Data recibido de getAnimeInfo:`, data); // Nuevo log
+    console.log(`[DEBUG /api/anime] Tipo de data: ${typeof data}`); // Nuevo log
     res.json(data);
   } catch (error) {
-    console.error(`Error en /api/anime con id '${id}':`, error); // Log más detallado en el servidor
-    res.status(500).json({ message: 'Error al obtener la información del anime.', details: error.message }); // Error para el cliente
+    console.error(`Error en /api/anime con id '${id}':`, error); 
+    res.status(500).json({ message: 'Error al obtener la información del anime.', details: error.message }); 
   }
 });
 
