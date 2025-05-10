@@ -23,8 +23,13 @@ app.get('/api/search', async (req, res) => {
 // Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
-  const data = await getAnimeInfo(id);
-  res.json(data);
+  try {
+    const data = await getAnimeInfo(id);
+    res.json(data);
+  } catch (error) {
+    console.error(`Error en /api/anime con id '${id}':`, error); // Log más detallado en el servidor
+    res.status(500).json({ message: 'Error al obtener la información del anime.', details: error.message }); // Error para el cliente
+  }
 });
 
 // Obtener solo la lista de episodios de un anime
