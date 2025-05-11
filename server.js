@@ -115,7 +115,11 @@ app.get('/api/anime', async (req, res) => {
         console.log('[DEBUG /api/anime] No se encontró el rating (span#votes_prmd).');
         rating = 'N/A'; // Valor por defecto si no se encuentra
     }
-
+    // estado
+    let status = $('span.fa-tv').text().trim();
+    if (!status) {
+        console.log(`[DEBUG /api/anime] No se pudo encontrar el estado para el ID: ${id}`);
+    }
     // Extraer y formatear los episodios desde la variable episodes en el script
     let formattedEpisodes = [];
     try {
@@ -154,6 +158,7 @@ app.get('/api/anime', async (req, res) => {
       synopsis: synopsis ? synopsis.trim() : 'No se encontró sinopsis.',
       genres: genres,
       rating: rating,
+      status: status,
       episodes: formattedEpisodes
     });
 
