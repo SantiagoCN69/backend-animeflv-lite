@@ -3,10 +3,8 @@ const cors = require('cors');
 const app = express();
 const { getLatest, searchAnime, getAnimeInfo } = require('animeflv-api');
 const cheerio = require('cheerio');
-const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-// const fs = require('fs'); // Eliminada línea duplicada
 
 app.use(cors());
 
@@ -38,15 +36,6 @@ app.get('/api/anime', async (req, res) => {
       }
     });
     const html = response.data;
-
-    // Guardar el HTML en un archivo para depuración
-    const filePath = path.join(__dirname, 'anime_page_content.html');
-    try {
-      fs.writeFileSync(filePath, html);
-      console.log(`[DEBUG /api/anime] HTML guardado en: ${filePath}`);
-    } catch (writeError) {
-      console.error(`[DEBUG /api/anime] Error al guardar el HTML: ${writeError.message}`);
-    }
 
     const $ = cheerio.load(html);
 
