@@ -42,23 +42,6 @@ app.get('/api/anime', async (req, res) => {
     let animeTitle = id; // Fallback al ID
     let animeSlug = id; // Fallback al ID para el slug
 
-    try {
-      const animeInfoRegex = /var anime_info = \s*(\[\s*["\d].*?\]);/;
-      const animeInfoMatch = html.match(animeInfoRegex);
-      if (animeInfoMatch && animeInfoMatch[1]) {
-        const animeInfoArray = JSON.parse(animeInfoMatch[1]);
-        if (animeInfoArray.length > 1 && typeof animeInfoArray[1] === 'string') {
-          animeTitle = animeInfoArray[1];
-          console.log(`[DEBUG /api/anime] Título extraído de anime_info: ${animeTitle}`);
-        }
-        if (animeInfoArray.length > 2 && typeof animeInfoArray[2] === 'string') {
-          animeSlug = animeInfoArray[2];
-          console.log(`[DEBUG /api/anime] Slug extraído de anime_info: ${animeSlug}`);
-        }
-      }
-    } catch (e) {
-      console.error(`[DEBUG /api/anime] Error al parsear anime_info: ${e.message}`);
-    }
 
     if (animeTitle === id) { // Si no se pudo extraer de anime_info, intentar con selectores h1
         let h1Title = $('h1.Title').text().trim();
@@ -66,11 +49,6 @@ app.get('/api/anime', async (req, res) => {
         if (!h1Title) h1Title = $('h1.page-title').text().trim();
         if (h1Title) animeTitle = h1Title;
         else console.log(`[DEBUG /api/anime] No se pudo extraer el título real con selectores h1, usando ID para título: ${id}`);
-    }
-    // Si el slug sigue siendo el id, y el título se pudo extraer de h1, usar una versión simplificada del título para el slug.
-    if (animeSlug === id && animeTitle !== id) {
-        animeSlug = animeTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        console.log(`[DEBUG /api/anime] Slug generado a partir del título h1: ${animeSlug}`);
     }
 
     // Extraer la imagen de portada (cover)
