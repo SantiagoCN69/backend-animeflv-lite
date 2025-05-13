@@ -102,7 +102,6 @@ app.get('/api/anime', async (req, res) => {
             }
           });
           formattedEpisodes.reverse(); // Para orden ascendente (Ep 1, 2, 3...)
-          console.log(`[DEBUG /api/anime] ${formattedEpisodes.length} episodios extraídos y formateados de var episodes.`);
         }
       } else {
         console.log("[DEBUG /api/anime] No se encontró la variable JS 'episodes' o estaba vacía.");
@@ -111,8 +110,6 @@ app.get('/api/anime', async (req, res) => {
       console.error(`[DEBUG /api/anime] Error al parsear var episodes: ${e.message}. String problemático: ${html.match(/var episodes = (.*?);/)?.[1]}`);
     }
 
-    console.log(`[DEBUG /api/anime] Final Data - ID: ${id}, Título: ${animeTitle}, Cover: ${cover ? 'Encontrada' : 'No encontrada'}, Sinopsis: ${synopsis ? 'Encontrada' : 'No encontrada'}, # Episodios: ${formattedEpisodes.length}`);
-    
     res.json({
       title: animeTitle,
       cover: cover || 'No se encontró portada.',
