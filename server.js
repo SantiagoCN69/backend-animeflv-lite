@@ -58,18 +58,13 @@ app.get('/api/anime', async (req, res) => {
       const pageBaseUrl = new URL(animePageUrl).origin;
       cover = pageBaseUrl + cover;
     }
-    if (!cover) {
-      console.log(`[DEBUG /api/anime] No se pudo encontrar la portada para el ID: ${id}`);
-    }
+
 
     // Extraer la sinopsis
     let synopsis = $('div.Description p').first().text();
     if (!synopsis) synopsis = $('div.container section.Main article.Anime div.Description p').first().text();
     if (!synopsis) synopsis = $('div[class*="sinopsis"], div[id*="sinopsis"] p').first().text();
-    if (!synopsis) synopsis = $('p').filter((i, el) => $(el).text().trim() !== '').first().text();
-    if (!synopsis) {
-      console.log(`[DEBUG /api/anime] No se pudo encontrar la sinopsis para el ID: ${id}`);
-    }
+
 
     // Extraer los géneros
     const genres = [];
@@ -79,25 +74,13 @@ app.get('/api/anime', async (req, res) => {
         genres.push(genreText);
       }
     });
-    if (genres.length > 0) {
-        console.log(`[DEBUG /api/anime] Géneros extraídos: ${genres.join(', ')}`);
-    } else {
-        console.log('[DEBUG /api/anime] No se encontraron géneros.');
-    }
 
     // Extraer el rating
     let rating = $('span#votes_prmd').text().trim();
-    if (rating) {
-        console.log(`[DEBUG /api/anime] Rating extraído: ${rating}`);
-    } else {
-        console.log('[DEBUG /api/anime] No se encontró el rating (span#votes_prmd).');
-        rating = 'N/A'; // Valor por defecto si no se encuentra
-    }
+
     // estado
     let status = $('span.fa-tv').text().trim();
-    if (!status) {
-        console.log(`[DEBUG /api/anime] No se pudo encontrar el estado para el ID: ${id}`);
-    }
+
     // Extraer y formatear los episodios desde la variable episodes en el script
     let formattedEpisodes = [];
     try {
