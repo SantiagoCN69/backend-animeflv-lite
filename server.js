@@ -81,6 +81,14 @@ app.get('/api/anime', async (req, res) => {
     // estado
     let status = $('span.fa-tv').text().trim();
 
+    // relacionado
+    let related = [];
+    $('ul.ListAnmRel li a').each((i, elem) => {
+      const relatedText = $(elem).text().trim();
+      if (relatedText) {
+        related.push(relatedText);
+      }
+    });
     // Extraer y formatear los episodios desde la variable episodes en el script
     let formattedEpisodes = [];
     try {
@@ -88,7 +96,7 @@ app.get('/api/anime', async (req, res) => {
       const episodesMatch = html.match(episodesRegex);
       if (episodesMatch && episodesMatch[1]) {
         const episodesArrayString = episodesMatch[1];
-        // Sanitize string for JSON.parse: ensure it's a valid JSON array literal string
+        
         const sanitizedEpisodesString = episodesArrayString.replace(/,\s*]/g, ']'); // Remove trailing commas before closing bracket if any
         const episodesData = JSON.parse(sanitizedEpisodesString);
 
@@ -117,6 +125,7 @@ app.get('/api/anime', async (req, res) => {
       genres: genres,
       rating: rating,
       status: status,
+      related: related,
       episodes: formattedEpisodes
     });
 
