@@ -83,10 +83,16 @@ app.get('/api/anime', async (req, res) => {
 
     // relacionado
     let related = [];
-    $('ul.ListAnmRel li a').each((i, elem) => {
-      const relatedText = $(elem).text().trim();
-      if (relatedText) {
-        related.push(relatedText);
+    $('ul.ListAnmRel li').each((i, elem) => {
+      const linkText = $(elem).find('a').text().trim();
+      const fullText = $(elem).text().trim();
+      const extraText = fullText.replace(linkText, '').trim();
+      
+      if (linkText) {
+        related.push({
+          title: linkText,
+          relation: extraText
+        });
       }
     });
     // Extraer y formatear los episodios desde la variable episodes en el script
