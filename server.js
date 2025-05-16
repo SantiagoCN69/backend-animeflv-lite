@@ -26,14 +26,9 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/browse', async (req, res) => {
   // Construir la URL completa con la base y los parámetros de la consulta
   const baseUrl = 'https://www3.animeflv.net/browse?';
-  
+
   // Obtener la URL completa desde los parámetros de la consulta
-  const fullUrl = `${baseUrl}${req.url.split('?')[1]}`;  // Usamos req.url para obtener la URL completa con parámetros
-
-  console.log('URL completa:', fullUrl);  // Registro para depuración
-
-
-
+  const fullUrl = `${baseUrl}${req.url.split('?')[1]}`;
   try {
     // Hacemos la petición a la página
     const response = await axios.get(fullUrl, {
@@ -44,7 +39,7 @@ app.get('/api/browse', async (req, res) => {
 
     // Usamos cheerio para parsear el HTML
     const $ = cheerio.load(response.data);
-    
+
     // Extraemos información de cada anime
     const animes = $('article.Anime').map((i, element) => {
       const article = $(element);
@@ -53,7 +48,7 @@ app.get('/api/browse', async (req, res) => {
       const type = typeElement.html();
       const url = article.find('a').attr('href');
       const cover = article.find('img').attr('src');
-      
+
       return {
         title,
         type,
@@ -61,11 +56,11 @@ app.get('/api/browse', async (req, res) => {
         cover
       };
     }).get();
-    res.json({animes});
+    res.json({ animes });
 
   } catch (error) {
     console.error('Error al procesar la página:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Error al procesar la página',
       error: error.message
     });
@@ -94,11 +89,11 @@ app.get('/api/anime', async (req, res) => {
 
 
     if (animeTitle === id) { // Si no se pudo extraer de anime_info, intentar con selectores h1
-        let h1Title = $('h1.Title').text().trim();
-        if (!h1Title) h1Title = $('h1.anime-title').text().trim();
-        if (!h1Title) h1Title = $('h1.page-title').text().trim();
-        if (h1Title) animeTitle = h1Title;
-        else console.log(`[DEBUG /api/anime] No se pudo extraer el título real con selectores h1, usando ID para título: ${id}`);
+      let h1Title = $('h1.Title').text().trim();
+      if (!h1Title) h1Title = $('h1.anime-title').text().trim();
+      if (!h1Title) h1Title = $('h1.page-title').text().trim();
+      if (h1Title) animeTitle = h1Title;
+      else console.log(`[DEBUG /api/anime] No se pudo extraer el título real con selectores h1, usando ID para título: ${id}`);
     }
 
     // Extraer la imagen de portada (cover)
@@ -137,7 +132,7 @@ app.get('/api/anime', async (req, res) => {
       const linkText = $(elem).find('a').text().trim();
       const fullText = $(elem).text().trim();
       const extraText = fullText.replace(linkText, '').trim();
-      
+
       if (linkText) {
         related.push({
           title: linkText,
@@ -152,7 +147,7 @@ app.get('/api/anime', async (req, res) => {
       const episodesMatch = html.match(episodesRegex);
       if (episodesMatch && episodesMatch[1]) {
         const episodesArrayString = episodesMatch[1];
-        
+
         const sanitizedEpisodesString = episodesArrayString.replace(/,\s*]/g, ']'); // Remove trailing commas before closing bracket if any
         const episodesData = JSON.parse(sanitizedEpisodesString);
 
