@@ -54,8 +54,6 @@ app.get('/api/browse', async (req, res) => {
         url
       };
     }).get();
-    
-    console.log('Respuesta:', JSON.stringify(articles[0], null, 2));
     res.json(articles);
 
   } catch (error) {
