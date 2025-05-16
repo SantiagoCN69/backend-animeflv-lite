@@ -41,20 +41,22 @@ app.get('/api/browse', async (req, res) => {
     const $ = cheerio.load(response.data);
     
     // Extraemos información de cada anime
-    const articles = $('article.Anime').map((i, element) => {
+    const animes = $('article.Anime').map((i, element) => {
       const article = $(element);
       const title = article.find('.Title').text();
       const typeElement = article.find('.Type');
       const type = typeElement.html();
       const url = article.find('a').attr('href');
+      const cover = article.find('img').attr('src');
       
       return {
         title,
         type,
-        url
+        url,
+        cover
       };
     }).get();
-    res.json(articles);
+    res.json({animes});
 
   } catch (error) {
     console.error('Error al procesar la página:', error);
