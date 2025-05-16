@@ -26,8 +26,13 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/browse', async (req, res) => {
   // Construir la URL completa con la base y los parámetros de la consulta
   const baseUrl = 'https://www3.animeflv.net/browse?';
-  const query = new URLSearchParams(req.query).toString();
-  const fullUrl = `${baseUrl}${query}`;
+  
+  // Obtener la URL completa desde los parámetros de la consulta
+  const fullUrl = `${baseUrl}${req.url.split('?')[1]}`;  // Usamos req.url para obtener la URL completa con parámetros
+
+  console.log('URL completa:', fullUrl);  // Registro para depuración
+
+
 
   try {
     // Hacemos la petición a la página
