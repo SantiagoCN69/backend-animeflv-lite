@@ -39,6 +39,7 @@ app.get('/api/browse', async (req, res) => {
 
     // Usamos cheerio para parsear el HTML
     const $ = cheerio.load(response.data);
+    const PaginasTotales = $('ul.pagination li').eq(-2).text();
 
     // Extraemos información de cada anime
     const animes = $('article.Anime').map((i, element) => {
@@ -53,10 +54,10 @@ app.get('/api/browse', async (req, res) => {
         title,
         type,
         url,
-        cover
+        cover,
       };
     }).get();
-    res.json({ animes });
+    res.json({ PaginasTotales, animes });
 
   } catch (error) {
     console.error('Error al procesar la página:', error);
