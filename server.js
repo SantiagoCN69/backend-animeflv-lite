@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const { getLatest, searchAnime, getAnimeInfo } = require('animeflv-api');
+const { getLatest, searchAnime, getAnimeInfo, searchAnimesByFilter } = require('animeflv-api');
 const cheerio = require('cheerio');
 const path = require('path');
 const axios = require('axios');
@@ -21,6 +21,51 @@ app.get('/api/search', async (req, res) => {
   res.json(data);
 });
 
+// Navegar por animes
+// Endpoint para contar elementos de la lista
+app.get('/api/browse', async (req, res) => {
+  // Construir la URL completa con la base y los parámetros de la consulta
+  const baseUrl = 'https://www3.animeflv.net/browse?';
+  const query = new URLSearchParams(req.query).toString();
+  const fullUrl = `${baseUrl}${query}`;
+
+  try {
+    // Hacemos la petición a la página
+    const response = await axios.get(fullUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    // Usamos cheerio para parsear el HTML
+    const $ = cheerio.load(response.data);
+    
+    // Extraemos información de cada anime
+    const articles = $('article.Anime').map((i, element) => {
+      const article = $(element);
+      const title = article.find('.Title').text();
+      const typeElement = article.find('.Type');
+      const type = typeElement.html();
+      const url = article.find('a').attr('href');
+      
+      return {
+        title,
+        type,
+        url
+      };
+    }).get();
+    
+    console.log('Respuesta:', JSON.stringify(articles[0], null, 2));
+    res.json(articles);
+
+  } catch (error) {
+    console.error('Error al procesar la página:', error);
+    res.status(500).json({ 
+      message: 'Error al procesar la página',
+      error: error.message
+    });
+  }
+});
 // Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
@@ -146,18 +191,6 @@ app.get('/api/anime', async (req, res) => {
   }
 });
 
-
-// Obtener solo la lista de episodios de un anime
-app.get('/api/episodes', async (req, res) => {
-  const id = req.query.id;
-  try {
-    const data = await getAnimeInfo(id);
-    res.json({ episodes: data.episodes });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener episodios' });
-  }
-});
 
 // Obtener los enlaces de video de un episodio
 app.get('/api/episode', async (req, res) => {
