@@ -144,7 +144,8 @@ app.get('/api/anime', async (req, res) => {
     // Extraer y formatear los episodios desde la variable episodes en el script
     let formattedEpisodes = [];
     try {
-      const episodesRegex = /var episodes = (\s*\[\s*(?:\[\d+\s*,\s*\d+\]\s*(?:,\s*\[\d+\s*,\s*\d+\]\s*)*)?\]\s*);/;
+      // Expresión regular más flexible para encontrar la variable episodes
+      const episodesRegex = /var episodes = (\s*\[\s*(?:\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*(?:,\s*\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*)*)?\]\s*);/;
       const episodesMatch = html.match(episodesRegex);
       if (episodesMatch && episodesMatch[1]) {
         const episodesArrayString = episodesMatch[1];
@@ -153,6 +154,13 @@ app.get('/api/anime', async (req, res) => {
         const episodesData = JSON.parse(sanitizedEpisodesString);
 
         if (Array.isArray(episodesData)) {
+          // Convertir los números a float y ordenar correctamente
+          episodesData.sort((a, b) => {
+            const numA = parseFloat(a[0]);
+            const numB = parseFloat(b[0]);
+            return numA - numB;
+          });
+
           episodesData.forEach(epPair => {
             if (Array.isArray(epPair) && epPair.length >= 1) {
               const epNum = epPair[0];
@@ -161,13 +169,13 @@ app.get('/api/anime', async (req, res) => {
               formattedEpisodes.push({ number: epNum, url: episodeUrl });
             }
           });
-          formattedEpisodes.reverse(); // Para orden ascendente (Ep 1, 2, 3...)
+          // No necesitamos reverse() ya que los ordenamos correctamente con sort()
         }
       } else {
-        console.log("[DEBUG /api/anime] No se encontró la variable JS 'episodes' o estaba vacía.");
+  
       }
     } catch (e) {
-      console.error(`[DEBUG /api/anime] Error al parsear var episodes: ${e.message}. String problemático: ${html.match(/var episodes = (.*?);/)?.[1]}`);
+      console.error(`Error al parsear var episodes: ${e.message}`);
     }
 
     res.json({
