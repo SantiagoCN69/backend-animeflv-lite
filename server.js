@@ -100,11 +100,23 @@ app.get('/api/anime', async (req, res) => {
     // Extraer la imagen de portada (cover)
     let cover = $('figure.AnimeCover img').attr('src');
     if (!cover) cover = $('figure img').first().attr('src');
+    const pageBaseUrl = new URL(animePageUrl).origin;
     if (cover && !cover.startsWith('http')) {
-      const pageBaseUrl = new URL(animePageUrl).origin;
       cover = pageBaseUrl + cover;
     }
 
+    // Extraer el banner (fondo de la ficha)
+    let banner = null;
+    const bannerStyle = $('div.Ficha.fchlt div.Bg').attr('style');
+    if (bannerStyle) {
+      const bannerMatch = bannerStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
+      if (bannerMatch && bannerMatch[1]) {
+        banner = bannerMatch[1].trim();
+        if (!banner.startsWith('http')) {
+          banner = pageBaseUrl + banner;
+        }
+      }
+    }
 
     // Extraer la sinopsis
     let synopsis = $('div.Description p').first().text();
@@ -181,6 +193,7 @@ app.get('/api/anime', async (req, res) => {
     res.json({
       title: animeTitle,
       cover: cover || 'No se encontró portada.',
+      banner: banner || 'No se encontró banner.',
       synopsis: synopsis ? synopsis.trim() : 'No se encontró sinopsis.',
       genres: genres,
       rating: rating,
