@@ -1,215 +1,213 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const { getLatest, searchAnime, getAnimeInfo, searchAnimesByFilter } = require('animeflv-api');
-const cheerio = require('cheerio');
-const path = require('path');
-const axios = require('axios');
+const animeflv = require('./sources/animeflv');
+const jkanime = require('./sources/jkanime');
 
 app.use(cors());
 
+// Función para deduplicar animes por título normalizado
+function deduplicateAnimes(animes) {
+  const seen = new Map();
+  
+  return animes.filter(anime => {
+    const normalizedTitle = animeflv.normalizeTitle(anime.title);
+    if (seen.has(normalizedTitle)) {
+      // Si ya existe, unir los servidores si están disponibles
+      const existing = seen.get(normalizedTitle);
+      if (anime.servidores && existing.servidores) {
+        // Combinar servidores únicos
+        const allServers = [...existing.servidores, ...anime.servidores];
+        const uniqueServers = allServers.filter((server, index, self) =>
+          index === self.findIndex(s => s.name === server.name)
+        );
+        existing.servidores = uniqueServers;
+      }
+      return false;
+    }
+    seen.set(normalizedTitle, anime);
+    return true;
+  });
+}
+
 // Últimos capítulos
 app.get('/api/latest', async (req, res) => {
-  const data = await getLatest();
-  res.json(data);
+  const source = req.query.source || 'all';
+  try {
+    let data;
+    if (source === 'animeflv') {
+      data = await animeflv.getLatestEpisodes();
+    } else if (source === 'jkanime') {
+      data = await jkanime.getLatestEpisodes();
+    } else {
+      // Buscar en todas las fuentes y deduplicar
+      const [animeflvData, jkanimeData] = await Promise.allSettled([
+        animeflv.getLatestEpisodes(),
+        jkanime.getLatestEpisodes()
+      ]);
+      
+      const results = [];
+      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
+        results.push(...(Array.isArray(animeflvData.value) ? animeflvData.value : []));
+      }
+      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
+        results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
+      }
+      // Deduplicar resultados por título
+      data = deduplicateAnimes(results);
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Error en /api/latest:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Buscar anime
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
-  const data = await searchAnime(query);
-  res.json(data);
+  const source = req.query.source || 'all';
+  
+  try {
+    let data;
+    if (source === 'animeflv') {
+      data = await animeflv.search(query);
+    } else if (source === 'jkanime') {
+      data = await jkanime.search(query);
+    } else {
+      // Buscar en todas las fuentes y combinar resultados
+      const [animeflvData, jkanimeData] = await Promise.allSettled([
+        animeflv.search(query),
+        jkanime.search(query)
+      ]);
+      
+      const results = [];
+      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
+        // animeflv devuelve {data: [...]} o array directo
+        const animeflvResults = animeflvData.value.data || animeflvData.value;
+        results.push(...(Array.isArray(animeflvResults) ? animeflvResults : []));
+      }
+      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
+        results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
+      }
+      // Deduplicar resultados por título
+      data = deduplicateAnimes(results);
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Error en /api/search:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Navegar por animes
-// Endpoint para contar elementos de la lista
 app.get('/api/browse', async (req, res) => {
-  // Construir la URL completa con la base y los parámetros de la consulta
-  const baseUrl = 'https://www3.animeflv.net/browse?';
-
-  // Obtener la URL completa desde los parámetros de la consulta
-  const fullUrl = `${baseUrl}${req.url.split('?')[1]}`;
+  const source = req.query.source || 'animeflv';
+  const params = req.url.split('?')[1];
+  
   try {
-    // Hacemos la petición a la página
-    const response = await axios.get(fullUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
-    // Usamos cheerio para parsear el HTML
-    const $ = cheerio.load(response.data);
-    const PaginasTotales = $('ul.pagination li').eq(-2).text();
-
-    // Extraemos información de cada anime
-    const animes = $('article.Anime').map((i, element) => {
-      const article = $(element);
-      const title = article.find('.Title').text();
-      const typeElement = article.find('.Type');
-      const type = typeElement.html();
-      const url = article.find('a').attr('href');
-      const cover = article.find('img').attr('src');
-
-      return {
-        title,
-        type,
-        url,
-        cover,
-      };
-    }).get();
-    res.json({ PaginasTotales, animes });
-
+    let data;
+    if (source === 'animeflv') {
+      data = await animeflv.browse(params);
+    } else if (source === 'jkanime') {
+      data = await jkanime.browse(params);
+    } else {
+      // Por defecto usar animeflv para browse
+      data = await animeflv.browse(params);
+    }
+    res.json(data);
   } catch (error) {
-    console.error('Error al procesar la página:', error);
-    res.status(500).json({
-      message: 'Error al procesar la página',
-      error: error.message
-    });
+    console.error('Error en /api/browse:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 // Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
+  const source = req.query.source || 'all';
+  
   if (!id) {
     return res.status(400).json({ message: 'El ID del anime es requerido' });
   }
+  
   try {
-    const animePageUrl = `https://www3.animeflv.net/anime/${id}`;
-    const response = await axios.get(animePageUrl, {
-      headers: {
-        // Intentar simular un navegador para evitar bloqueos básicos
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-    const html = response.data;
-
-    const $ = cheerio.load(html);
-
-    let animeTitle = id; // Fallback al ID
-    let animeSlug = id; // Fallback al ID para el slug
-
-
-    if (animeTitle === id) { // Si no se pudo extraer de anime_info, intentar con selectores h1
-      let h1Title = $('h1.Title').text().trim();
-      if (!h1Title) h1Title = $('h1.anime-title').text().trim();
-      if (!h1Title) h1Title = $('h1.page-title').text().trim();
-      if (h1Title) animeTitle = h1Title;
-      else console.log(`[DEBUG /api/anime] No se pudo extraer el título real con selectores h1, usando ID para título: ${id}`);
-    }
-
-    // Extraer la imagen de portada (cover)
-    let cover = $('figure.AnimeCover img').attr('src');
-    if (!cover) cover = $('figure img').first().attr('src');
-    const pageBaseUrl = new URL(animePageUrl).origin;
-    if (cover && !cover.startsWith('http')) {
-      cover = pageBaseUrl + cover;
-    }
-
-    // Extraer el banner (fondo de la ficha)
-    let banner = null;
-    const bannerStyle = $('div.Ficha.fchlt div.Bg').attr('style');
-    if (bannerStyle) {
-      const bannerMatch = bannerStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
-      if (bannerMatch && bannerMatch[1]) {
-        banner = bannerMatch[1].trim();
-        if (!banner.startsWith('http')) {
-          banner = pageBaseUrl + banner;
-        }
-      }
-    }
-
-    // Extraer la sinopsis
-    let synopsis = $('div.Description p').first().text();
-    if (!synopsis) synopsis = $('div.container section.Main article.Anime div.Description p').first().text();
-    if (!synopsis) synopsis = $('div[class*="sinopsis"], div[id*="sinopsis"] p').first().text();
-
-
-    // Extraer los géneros
-    const genres = [];
-    $('nav.Nvgnrs a').each((i, elem) => {
-      const genreText = $(elem).text().trim();
-      if (genreText) {
-        genres.push(genreText);
-      }
-    });
-
-    // Extraer el rating
-    let rating = $('span#votes_prmd').text().trim();
-
-    // estado
-    let status = $('span.fa-tv').text().trim();
-
-    // relacionado
-    let related = [];
-    $('ul.ListAnmRel li').each((i, elem) => {
-      const linkText = $(elem).find('a').text().trim();
-      const fullText = $(elem).text().trim();
-      const extraText = fullText.replace(linkText, '').trim();
-
-      if (linkText) {
-        related.push({
-          title: linkText,
-          relation: extraText
+    let data;
+    if (source === 'animeflv') {
+      data = await animeflv.getAnimeDetails(id);
+    } else if (source === 'jkanime') {
+      data = await jkanime.getAnimeDetails(id);
+    } else {
+      // Buscar en ambas fuentes y combinar resultados
+      const [animeflvData, jkanimeData] = await Promise.allSettled([
+        animeflv.getAnimeDetails(id),
+        jkanime.getAnimeDetails(id)
+      ]);
+      
+      // Combinar datos de ambas fuentes
+      const combined = {
+        sources: []
+      };
+      
+      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
+        combined.sources.push({
+          name: 'animeflv',
+          data: animeflvData.value
         });
+        // Usar datos de animeflv como base
+        Object.assign(combined, animeflvData.value);
       }
-    });
-    // Extraer y formatear los episodios desde la variable episodes en el script
-    let formattedEpisodes = [];
-    try {
-      // Expresión regular más flexible para encontrar la variable episodes
-      const episodesRegex = /var episodes = (\s*\[\s*(?:\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*(?:,\s*\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*)*)?\]\s*);/;
-      const episodesMatch = html.match(episodesRegex);
-      if (episodesMatch && episodesMatch[1]) {
-        const episodesArrayString = episodesMatch[1];
-
-        const sanitizedEpisodesString = episodesArrayString.replace(/,\s*]/g, ']'); // Remove trailing commas before closing bracket if any
-        const episodesData = JSON.parse(sanitizedEpisodesString);
-
-        if (Array.isArray(episodesData)) {
-          // Convertir los números a float y ordenar correctamente
-          episodesData.sort((a, b) => {
-            const numA = parseFloat(a[0]);
-            const numB = parseFloat(b[0]);
-            return numA - numB;
-          });
-
-          episodesData.forEach(epPair => {
-            if (Array.isArray(epPair) && epPair.length >= 1) {
-              const epNum = epPair[0];
-              // const otherId = epPair[1]; // No lo necesitamos para la URL final según el formato pedido
-              const episodeUrl = `https://www3.animeflv.net/ver/${animeSlug}-${epNum}`;
-              formattedEpisodes.push({ number: epNum, url: episodeUrl });
+      
+      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
+        combined.sources.push({
+          name: 'jkanime',
+          data: jkanimeData.value
+        });
+        
+        // Si animeflv falló, usar jkanime como base
+        if (!combined.title) {
+          Object.assign(combined, jkanimeData.value);
+        } else {
+          // Combinar géneros de jkanime si animeflv no tiene o tiene menos
+          if (jkanimeData.value.genres && jkanimeData.value.genres.length > 0) {
+            if (!combined.genres || combined.genres.length === 0) {
+              combined.genres = jkanimeData.value.genres;
+            } else {
+              // Combinar géneros únicos
+              const allGenres = [...combined.genres, ...jkanimeData.value.genres];
+              combined.genres = [...new Set(allGenres)];
+            }
+          }
+        }
+        
+        // Combinar episodios únicos
+        if (combined.episodes && jkanimeData.value.episodes) {
+          const allEpisodes = [...combined.episodes, ...jkanimeData.value.episodes];
+          const uniqueEpisodes = [];
+          const seenEpisodes = new Map();
+          
+          allEpisodes.forEach(ep => {
+            const key = `${ep.number}-${ep.url}`;
+            if (!seenEpisodes.has(key)) {
+              seenEpisodes.set(key, true);
+              uniqueEpisodes.push(ep);
             }
           });
-          // No necesitamos reverse() ya que los ordenamos correctamente con sort()
+          
+          combined.episodes = uniqueEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
         }
-      } else {
-  
       }
-    } catch (e) {
-      console.error(`Error al parsear var episodes: ${e.message}`);
+      
+      // Si ninguna fuente tiene datos, error
+      if (!combined.title) {
+        return res.status(404).json({ message: 'Anime no encontrado en ninguna fuente' });
+      }
+      
+      data = combined;
     }
-
-    res.json({
-      title: animeTitle,
-      cover: cover || 'No se encontró portada.',
-      banner: banner || 'No se encontró banner.',
-      synopsis: synopsis ? synopsis.trim() : 'No se encontró sinopsis.',
-      genres: genres,
-      rating: rating,
-      status: status,
-      related: related,
-      episodes: formattedEpisodes
-    });
-
+    res.json(data);
   } catch (error) {
-    console.error(`Error en /api/anime con id '${id}':`, error.message);
-    if (error.response) {
-      // Error de la petición axios (ej. 404 del sitio de AnimeFLV)
-      console.error(`[DEBUG /api/anime] Error de Axios: ${error.response.status} - ${error.response.statusText}`);
-      return res.status(error.response.status).json({ message: `Error al contactar AnimeFLV: ${error.response.statusText}` });
-    }
-    res.status(500).json({ message: 'Error al obtener la información del anime.', details: error.message });
+    console.error('Error en /api/anime:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -217,41 +215,98 @@ app.get('/api/anime', async (req, res) => {
 // Obtener los enlaces de video de un episodio
 app.get('/api/episode', async (req, res) => {
   const url = req.query.url;
+  const source = req.query.source || 'all';
+  
   if (!url) {
     return res.status(400).json({ error: 'Falta el parámetro url' });
   }
 
   try {
-    const resp = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-
-    // Buscar la variable "var videos = {...};"
-    const videosMatch = resp.data.match(/var videos = ({.*?});/s);
-    if (!videosMatch) {
-      return res.status(404).json({ error: 'No se encontró la variable de videos' });
-    }
-
-    let servidores = [];
-    try {
-      const videosObj = JSON.parse(videosMatch[1]);
-      if (videosObj.SUB && Array.isArray(videosObj.SUB)) {
-        servidores = videosObj.SUB.map(srv => srv.code);
+    let data;
+    if (source === 'animeflv') {
+      data = await animeflv.getEpisodeLinks(url);
+    } else if (source === 'jkanime') {
+      data = await jkanime.getEpisodeLinks(url);
+    } else {
+      // Buscar en ambas fuentes y unir servidores
+      const results = [];
+      
+      // Detectar fuente por URL y obtener servidores
+      if (url.includes('animeflv')) {
+        const animeflvData = await animeflv.getEpisodeLinks(url);
+        if (animeflvData.servidores) {
+          results.push(...animeflvData.servidores.map(s => ({ ...s, source: 'animeflv' })));
+        }
+      } else if (url.includes('jkanime')) {
+        const jkanimeData = await jkanime.getEpisodeLinks(url);
+        if (jkanimeData.servidores) {
+          results.push(...jkanimeData.servidores.map(s => ({ ...s, source: 'jkanime' })));
+        }
+      } else {
+        // Si no se puede detectar, intentar con animeflv
+        try {
+          const animeflvData = await animeflv.getEpisodeLinks(url);
+          if (animeflvData.servidores) {
+            results.push(...animeflvData.servidores.map(s => ({ ...s, source: 'animeflv' })));
+          }
+        } catch (e) {
+          console.log('Error con animeflv, intentando jkanime');
+        }
       }
-    } catch (e) {
-      return res.status(500).json({ error: 'Error al parsear los videos' });
+      
+      // Unir servidores únicos por nombre
+      const uniqueServers = [];
+      const seen = new Map();
+      
+      results.forEach(server => {
+        const key = server.name || server.url;
+        if (!seen.has(key)) {
+          seen.set(key, true);
+          uniqueServers.push(server);
+        }
+      });
+      
+      data = {
+        video: uniqueServers[0]?.url,
+        servidores: uniqueServers
+      };
     }
-
-    if (servidores.length === 0) {
-      return res.status(404).json({ error: 'No se encontraron links de video' });
-    }
-
-    return res.json({ video: servidores[0], servidores });
+    res.json(data);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener el video' });
+    console.error('Error en /api/episode:', error);
+    res.status(500).json({ error: error.message });
   }
 });
+// Ejemplo de unión de servidores (endpoint de prueba)
+app.get('/api/example/servers', async (req, res) => {
+  // Ejemplo simulado de cómo se unen los servidores
+  const exampleAnime = {
+    title: 'Naruto',
+    servidores: [
+      { name: 'mega', url: 'https://mega.nz/...' },
+      { name: 'fembed', url: 'https://fembed.com/...' }
+    ]
+  };
+
+  const duplicateAnime = {
+    title: 'Naruto',
+    servidores: [
+      { name: 'mega', url: 'https://mega.nz/...' }, // Duplicado
+      { name: 'streamtape', url: 'https://streamtape.com/...' } // Nuevo
+    ]
+  };
+
+  // Aplicar deduplicación y unión de servidores
+  const combined = deduplicateAnimes([exampleAnime, duplicateAnime]);
+
+  res.json({
+    mensaje: 'Ejemplo de unión de servidores con deduplicación',
+    original: [exampleAnime, duplicateAnime],
+    resultado: combined,
+    explicacion: 'Los servidores duplicados (mega) se eliminan, los únicos (fembed, streamtape) se unen'
+  });
+});
+
 // Iniciar servidor
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
