@@ -13,45 +13,122 @@ function normalizeTitle(title) {
 
 // Últimos capítulos
 async function getLatestEpisodes() {
+    try {
+        const response = await axios.get(BASE_URL, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+            }
+        });
+
+        const $ = cheerio.load(response.data);
+
+        const latest = [];
+
+        // SOLO la pestaña de Animes
+        $("#animes .dir1").each((_, el) => {
+            const item = $(el);
+
+            const link = item.find("a").first();
+            const img = item.find("img").first();
+
+            const title = item.find(".card-title").text().trim();
+
+            const badge = item.find(".badge-primary").text().trim();
+            const chapter = parseInt(badge.replace(/[^\d]/g, ""), 10);
+
+            const cover =
+                img.attr("data-animepic") ||
+                img.attr("src");
+
+            const url = link.attr("href");
+
+            if (!title || !url || isNaN(chapter)) return;
+
+            latest.push({
+                title,
+                chapter,
+                cover,
+                url
+            });
+        });
+
+        console.log(`JKAnime: ${latest.length} capítulos encontrados`);
+
+        return latest;
+
+    } catch (error) {
+        console.error("Error obteniendo últimos capítulos de JKAnime:", error.message);
+        return [];
+    }
+}
+
+// Estrenos de temporada
+async function getEstrenos() {
   try {
-    const response = await axios.get(`${BASE_URL}/`, {
+    const response = await axios.get(`${BASE_URL}/estrenos/`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+        "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Referer": "https://jkanime.net/"
       }
     });
 
     const $ = cheerio.load(response.data);
-    const animes = [];
 
-    $('.episodes-item').each((i, element) => {
-      const $item = $(element);
-      const title = $item.find('.episodes-title').text().trim();
-      const episode = $item.find('.episodes-number').text().trim();
-      const image = $item.find('img').attr('src');
-      const link = $item.find('a').attr('href');
-      
-      if (title && link) {
-        // Extraer ID de la URL
-        const urlParts = link.replace(BASE_URL, '').split('/').filter(Boolean);
-        const id = urlParts[0] || urlParts[urlParts.length - 1];
-        
-        animes.push({
-          id: id,
-          title: title,
-          episode: episode,
-          image: image ? (image.startsWith('http') ? image : BASE_URL + image) : null,
-          url: link.startsWith('http') ? link : BASE_URL + link,
-          source: 'jkanime'
+    console.log("====== DEBUG JKANIME ======");
+    console.log("Status:", response.status);
+    console.log("Cards:", $(".card").length);
+    console.log("Dir1:", $(".dir1").length);
+    console.log("card-title:", $(".card-title").length);
+    console.log("Tiene Tenmaku:", response.data.includes("Tenmaku"));
+    console.log("Tiene data-animepic:", response.data.includes("data-animepic"));
+    console.log("===========================");
+
+    const latest = [];
+
+    $(".card").each((_, element) => {
+      const card = $(element);
+
+      const href = card.find("a").attr("href");
+      const title = card.find(".card-title").text().trim();
+
+      const badge = card.find(".badge-primary").text().trim();
+      const chapter = parseInt(
+        badge.replace(/Ep/i, "").trim(),
+        10
+      );
+
+      const img = card.find("img");
+
+      const cover =
+        img.attr("data-animepic") ||
+        img.attr("src");
+
+      if (title && href) {
+        latest.push({
+          title,
+          chapter: isNaN(chapter) ? null : chapter,
+          cover,
+          url: href
         });
       }
     });
 
-    return animes;
+    console.log("Animes encontrados:", latest.length);
+
+    return latest;
+
   } catch (error) {
-    console.error('Error en getLatestEpisodes JKAnime:', error.message);
+    console.error("Error JKAnime:", error);
     return [];
   }
 }
+
 
 // Buscar anime
 async function search(query) {
@@ -362,6 +439,7 @@ async function getEpisodeLinks(url) {
 
 module.exports = {
   getLatestEpisodes,
+  getEstrenos,
   search,
   browse,
   getAnimeDetails,
