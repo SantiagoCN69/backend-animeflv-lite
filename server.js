@@ -35,27 +35,30 @@ app.get('/api/latest', async (req, res) => {
   const source = req.query.source || 'all';
   try {
     let data;
+
     if (source === 'animeflv') {
       data = await animeflv.getLatestEpisodes();
     } else if (source === 'jkanime') {
       data = await jkanime.getLatestEpisodes();
     } else {
-      // Buscar en todas las fuentes y deduplicar
-      const [animeflvData, jkanimeData] = await Promise.allSettled([
-        animeflv.getLatestEpisodes(),
-        jkanime.getLatestEpisodes()
+      const [jkanimeData, animeflvData] = await Promise.allSettled([
+        jkanime.getLatestEpisodes(),
+        animeflv.getLatestEpisodes()
       ]);
-      
+
       const results = [];
-      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
-        results.push(...(Array.isArray(animeflvData.value) ? animeflvData.value : []));
-      }
+
       if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
         results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
       }
-      // Deduplicar resultados por título
+
+      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
+        results.push(...(Array.isArray(animeflvData.value) ? animeflvData.value : []));
+      }
+
       data = deduplicateAnimes(results);
     }
+
     res.json(data);
   } catch (error) {
     console.error('Error en /api/latest:', error);
