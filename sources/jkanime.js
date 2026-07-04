@@ -351,88 +351,91 @@ async function getAnimeDetails(id) {
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
+    console.log("🔗 URL:", url);
+
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     });
 
     const $ = cheerio.load(response.data);
-    const servers = [];
 
-    // Buscar la variable JavaScript 'servers' que contiene la información detallada de servidores
+    const servidores = [];
+
     $('script').each((i, elem) => {
       const scriptContent = $(elem).html();
-      if (scriptContent && scriptContent.includes('var servers =')) {
-        // Extraer el JSON de la variable servers
-        const serversMatch = scriptContent.match(/var servers = (\[[\s\S]*?\]);/);
-        if (serversMatch) {
-          try {
-            const serversJson = JSON.parse(serversMatch[1]);
-            serversJson.forEach((server, index) => {
-              // Decodificar la URL base64 del campo 'remote'
-              if (server.remote) {
-                try {
-                  const decodedUrl = Buffer.from(server.remote, 'base64').toString('utf-8');
-                  servers.push({
-                    name: server.server || `Server ${index + 1}`,
-                    url: decodedUrl,
-                    lang: server.lang,
-                    size: server.size
-                  });
-                } catch (e) {
-                  console.error('Error decodificando URL base64:', e.message);
-                }
-              }
+      if (!scriptContent) return;
+
+      // =========================
+      // 🔥 SERVERS (descargas)
+      // =========================
+      const serverMatch = scriptContent.match(/var\s+servers\s*=\s*(\[[\s\S]*?\])/);
+
+      if (serverMatch) {
+        try {
+          const serversJson = JSON.parse(serverMatch[1]);
+
+          serversJson.forEach(server => {
+            if (!server.remote) return;
+
+            try {
+              const decodedUrl = Buffer.from(
+                server.remote,
+                'base64'
+              ).toString('utf-8');
+
+              servidores.push({
+                type: "download",
+                name: server.server,
+                url: decodedUrl,
+                size: server.size
+              });
+
+            } catch (e) {}
+          });
+
+        } catch (e) {}
+      }
+
+      // =========================
+      // 🎬 VIDEO (players)
+      // =========================
+      const videoMatches = scriptContent.match(/video\[\d+\]\s*=\s*'([^']+)'/g);
+
+      if (videoMatches) {
+        videoMatches.forEach((m, index) => {
+          const srcMatch = m.match(/src="([^"]+)"/);
+
+          if (srcMatch) {
+            servidores.push({
+              type: "player",
+              name: `Player ${index + 1}`,
+              url: srcMatch[1]
             });
-          } catch (e) {
-            console.error('Error parseando JSON de servers:', e.message);
           }
-        }
+        });
       }
     });
 
-    // Si no se encontró la variable servers, intentar con el método anterior (video array)
-    if (servers.length === 0) {
-      $('script').each((i, elem) => {
-        const scriptContent = $(elem).html();
-        if (scriptContent && scriptContent.includes('var video = []')) {
-          const videoAssignments = scriptContent.match(/video\[\d+\]\s*=\s*'([^']+)'/g);
-          if (videoAssignments) {
-            videoAssignments.forEach((assignment, index) => {
-              const iframeMatch = assignment.match(/video\[\d+\]\s*=\s*'([^']+)'/);
-              if (iframeMatch) {
-                const iframeHtml = iframeMatch[1];
-                const srcMatch = iframeHtml.match(/src="([^"]+)"/);
-                if (srcMatch) {
-                  const serverUrl = srcMatch[1];
-                  let serverName = `Server ${index + 1}`;
-                  if (serverUrl.includes('um')) serverName = 'Uptostream';
-                  else if (serverUrl.includes('fembed')) serverName = 'Fembed';
-                  else if (serverUrl.includes('mega')) serverName = 'Mega';
-                  else if (serverUrl.includes('streamtape')) serverName = 'Streamtape';
-                  else if (serverUrl.includes('gogo')) serverName = 'Gogo';
-                  else if (serverUrl.includes('ss')) serverName = 'SS';
-                  
-                  servers.push({
-                    name: serverName,
-                    url: serverUrl
-                  });
-                }
-              }
-            });
-          }
-        }
-      });
+    console.log("\n📊 TOTAL SERVIDORES:", servidores.length);
+
+    servidores.forEach((s, i) => {
+      console.log(`[${i}] ${s.type} -> ${s.name} -> ${s.url}`);
+    });
+
+    if (servidores.length === 0) {
+      throw new Error("No se encontraron servidores");
     }
 
-    if (servers.length === 0) {
-      throw new Error('No se encontraron servidores');
-    }
+    return {
+      video: servidores[0].url,
+      servidores
+    };
 
-    return { video: servers[0].url, servidores: servers };
   } catch (error) {
-    console.error('Error en getEpisodeLinks JKAnime:', error.message);
+    console.error("❌ ERROR:", error.message);
     throw error;
   }
 }
