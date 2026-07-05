@@ -176,46 +176,38 @@ async function search(query) {
 // Navegar por animes
 async function browse(params) {
   try {
-    const response = await axios.get(`${BASE_URL}/directorio?${params}`, {
+    const response = await axios.get(`${BASE_URL}/directorio/?${params}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0'
       }
     });
 
-    const $ = cheerio.load(response.data);
-    const animes = [];
+    const html = response.data;
 
-    $('.anime-item').each((i, element) => {
-      const $item = $(element);
-      const title = $item.find('.anime-title').text().trim();
-      const image = $item.find('img').attr('src');
-      const link = $item.find('a').attr('href');
-      const type = $item.find('.anime-type').text().trim();
-      
-      if (title && link) {
-        // Extraer ID de la URL
-        const urlParts = link.replace(BASE_URL, '').split('/').filter(Boolean);
-        const id = urlParts[0] || urlParts[urlParts.length - 1];
-        
-        animes.push({
-          id: id,
-          title: title,
-          image: image ? (image.startsWith('http') ? image : BASE_URL + image) : null,
-          url: link.startsWith('http') ? link : BASE_URL + link,
-          type: type,
-          source: 'jkanime'
-        });
-      }
-    });
+    // 🔥 extraer JSON real
+    const match = html.match(/var\s+animes\s*=\s*({[\s\S]*?});/);
 
-    // Obtener total de páginas
-    const pagination = $('.pagination').length;
-    const PaginasTotales = pagination > 0 ? $('.pagination li').last().prev().text() : '1';
+    if (!match) {
+      return { PaginasTotales: "0", animes: [] };
+    }
 
-    return { PaginasTotales, animes };
+    const data = JSON.parse(match[1]);
+
+    return {
+      PaginasTotales: data.total_pages || data.last_page || "161",
+      animes: data.data.map(a => ({
+        id: a.id,
+        title: a.title,
+        image: a.image || null,
+        url: `https://jkanime.net/anime/${a.id}/`,
+        synopsis: a.synopsis || "",
+        source: "jkanime"
+      }))
+    };
+
   } catch (error) {
-    console.error('Error en browse JKAnime:', error.message);
-    return { PaginasTotales: '0', animes: [] };
+    console.error("Error en browse JKAnime:", error.message);
+    return { PaginasTotales: "0", animes: [] };
   }
 }
 
