@@ -176,7 +176,9 @@ async function search(query) {
 // Navegar por animes
 async function browse(params) {
   try {
-    const response = await axios.get(`${BASE_URL}/directorio/?${params}`, {
+    const url = `${BASE_URL}/directorio/?${params}`;
+
+    const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0'
       }
@@ -184,18 +186,31 @@ async function browse(params) {
 
     const html = response.data;
 
-    // 🔥 extraer JSON real
+    // 🔥 extraer el objeto JS: var animes = {...};
     const match = html.match(/var\s+animes\s*=\s*({[\s\S]*?});/);
 
     if (!match) {
-      return { PaginasTotales: "0", animes: [] };
+      return {
+        PaginasTotales: "0",
+        animes: []
+      };
     }
 
-    const data = JSON.parse(match[1]);
+    // 🔥 convertir string a objeto JS seguro
+    let data;
+    try {
+      data = Function('"use strict"; return (' + match[1] + ')')();
+    } catch (e) {
+      console.error("Error parseando animes:", e.message);
+      return {
+        PaginasTotales: "0",
+        animes: []
+      };
+    }
 
     return {
       PaginasTotales: data.total_pages || data.last_page || "161",
-      animes: data.data.map(a => ({
+      animes: (data.data || []).map(a => ({
         id: a.id,
         title: a.title,
         image: a.image || null,
@@ -207,7 +222,10 @@ async function browse(params) {
 
   } catch (error) {
     console.error("Error en browse JKAnime:", error.message);
-    return { PaginasTotales: "0", animes: [] };
+    return {
+      PaginasTotales: "0",
+      animes: []
+    };
   }
 }
 
