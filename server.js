@@ -116,7 +116,7 @@ app.get('/api/browse', async (req, res) => {
       data = await jkanime.browse(params);
     } else {
       // Por defecto usar animeflv para browse
-      data = await animeflv.browse(params);
+      data = await jkanime.browse(params);
     }
     res.json(data);
   } catch (error) {
