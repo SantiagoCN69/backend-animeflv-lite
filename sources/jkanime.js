@@ -488,10 +488,8 @@ async function getSchedule() {
         const timeAgo = $(el).find('.last time').text().trim();
 
         animesList.push({
-          id: id || null,
           title: title,
           image: image || null,
-          url: urlAnime || null,
           type: type || null, // Ej: "Serie", "ONA"
           last_episode: lastEpisodeText.replace('Último capítulo: ', '').trim(),
           time_ago: timeAgo
