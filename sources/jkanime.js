@@ -211,12 +211,11 @@ async function browse(params) {
     return {
       PaginasTotales: data.total_pages || data.last_page || "161",
       animes: (data.data || []).map(a => ({
-        id: a.id,
         title: a.title,
         image: a.image || null,
-        url: `https://jkanime.net/anime/${a.id}/`,
         synopsis: a.synopsis || "",
-        source: "jkanime"
+        source: "jkanime",
+        estado: a.estado || ""
       }))
     };
 
