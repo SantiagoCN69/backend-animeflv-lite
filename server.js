@@ -310,6 +310,16 @@ app.get('/api/example/servers', async (req, res) => {
   });
 });
 
+//obtener los animes por horarios
+app.get('/api/schedule', async (req, res) => {
+  try {
+    const data = await jkanime.getSchedule();
+    res.json(data);
+  } catch (error) {
+    console.error('Error en /api/schedule:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));

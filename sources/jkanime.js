@@ -449,6 +449,70 @@ async function getEpisodeLinks(url) {
   }
 }
 
+
+async function getSchedule() {
+  try {
+    // URL del horario de JKAnime
+    const url = `${BASE_URL}/horario/`; 
+    
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
+
+    const html = response.data;
+    const $ = cheerio.load(html);
+    const schedule = [];
+
+    // 🔥 Iterar sobre cada bloque de día de la semana
+    $('.box.semana').each((i, element) => {
+      // Extraer el nombre del día (ej. "Lunes") limpiando los espacios
+      const dayName = $(element).find('h2').text().trim();
+      
+      const animesList = [];
+
+      // 🔥 Iterar sobre cada anime dentro de la caja de ese día
+      $(element).find('.cajas .box.img').each((j, el) => {
+        const title = $(el).attr('title') || $(el).find('h3').text().trim();
+        const urlAnime = $(el).find('.boxx a').first().attr('href');
+        const image = $(el).find('.boxx img').attr('src');
+        
+        // Extraer datos adicionales (ID y Tipo) que están ocultos
+        const dataDiv = $(el).find('.svea');
+        const id = dataDiv.attr('data-anime');
+        const type = dataDiv.attr('data-tipo');
+
+        // Extraer información del último capítulo y tiempo
+        const lastEpisodeText = $(el).find('.last span').text().trim();
+        const timeAgo = $(el).find('.last time').text().trim();
+
+        animesList.push({
+          id: id || null,
+          title: title,
+          image: image || null,
+          url: urlAnime || null,
+          type: type || null, // Ej: "Serie", "ONA"
+          last_episode: lastEpisodeText.replace('Último capítulo: ', '').trim(),
+          time_ago: timeAgo
+        });
+      });
+
+      // Agregar el día y sus respectivos animes al arreglo final
+      schedule.push({
+        day: dayName,
+        animes: animesList
+      });
+    });
+
+    return schedule;
+
+  } catch (error) {
+    console.error("Error en getSchedule JKAnime:", error.message);
+    return [];
+  }
+}
+
 module.exports = {
   getLatestEpisodes,
   getEstrenos,
@@ -457,5 +521,6 @@ module.exports = {
   getAnimeDetails,
   getEpisodeLinks,
   normalizeTitle,
-  BASE_URL
+  BASE_URL,
+  getSchedule
 };
