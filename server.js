@@ -167,21 +167,17 @@ app.get('/api/anime', async (req, res) => {
           }
         }
         
-        if (combined.episodes && jkanimeData.value.episodes) {
-          const allEpisodes = [...combined.episodes, ...jkanimeData.value.episodes];
-          const uniqueEpisodes = [];
-          const seenEpisodes = new Map();
-          
-          allEpisodes.forEach(ep => {
-            const key = `${ep.number}-${ep.url}`;
-            if (!seenEpisodes.has(key)) {
-              seenEpisodes.set(key, true);
-              uniqueEpisodes.push(ep);
-            }
-          });
-          
-          combined.episodes = uniqueEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
-        }
+const episodesFLV = animeflvData.value?.episodes || [];
+const episodesJK = jkanimeData.value?.episodes || [];
+
+// Comparamos cuál tiene más episodios y tomamos esa lista como base
+if (episodesJK.length >= episodesFLV.length) {
+  combined.episodes = episodesJK;
+  combined.source = 'jkanime';
+} else {
+  combined.episodes = episodesFLV;
+  combined.source = 'animeflv';
+}
       }
       
       if (!combined.title) {
