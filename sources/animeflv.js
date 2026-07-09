@@ -19,7 +19,23 @@ async function getLatestEpisodes() {
 
 // Buscar anime
 async function search(query) {
-  return await searchAnime(query);
+  try {
+    const results = await searchAnime(query);
+    
+    const animeList = Array.isArray(results) ? results : (results.data || []);
+
+    return animeList.map(anime => ({
+      id: anime.id || anime.slug,
+      title: anime.title,
+      image: anime.image || anime.cover,
+      url: `${BASE_URL}/anime/${anime.id || anime.slug}`,
+      type: anime.type || 'TV',
+      source: 'animeflv'
+    }));
+  } catch (error) {
+    console.error('Error en search AnimeFLV:', error.message);
+    return [];
+  }
 }
 
 // Navegar por animes
