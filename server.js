@@ -7,25 +7,27 @@ const jkanime = require('./sources/jkanime');
 app.use(cors());
 
 // Función para deduplicar animes por título normalizado
+// Función para deduplicar animes por ID
 function deduplicateAnimes(animes) {
   const seen = new Map();
   
   return animes.filter(anime => {
-    const normalizedTitle = animeflv.normalizeTitle(anime.title);
-    if (seen.has(normalizedTitle)) {
-      // Si ya existe, unir los servidores si están disponibles
-      const existing = seen.get(normalizedTitle);
+    const id = anime.id || animeflv.normalizeTitle(anime.title);
+    
+    if (seen.has(id)) {
+      const existing = seen.get(id);
+      
       if (anime.servidores && existing.servidores) {
-        // Combinar servidores únicos
         const allServers = [...existing.servidores, ...anime.servidores];
         const uniqueServers = allServers.filter((server, index, self) =>
           index === self.findIndex(s => s.name === server.name)
         );
         existing.servidores = uniqueServers;
       }
-      return false;
+      return false; 
     }
-    seen.set(normalizedTitle, anime);
+
+    seen.set(id, anime);
     return true;
   });
 }
