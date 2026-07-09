@@ -125,6 +125,7 @@ app.get('/api/browse', async (req, res) => {
   }
 });
 // Detalles de anime
+
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
   const source = req.query.source || 'all';
@@ -140,49 +141,30 @@ app.get('/api/anime', async (req, res) => {
     } else if (source === 'jkanime') {
       data = await jkanime.getAnimeDetails(id);
     } else {
-      // Buscar en ambas fuentes y combinar resultados
       const [animeflvData, jkanimeData] = await Promise.allSettled([
         animeflv.getAnimeDetails(id),
         jkanime.getAnimeDetails(id)
       ]);
       
-      // Combinar datos de ambas fuentes
-      const combined = {
-        sources: []
-      };
+      const combined = {};
       
       if (animeflvData.status === 'fulfilled' && animeflvData.value) {
-        combined.sources.push({
-          name: 'animeflv',
-          data: animeflvData.value
-        });
-        // Usar datos de animeflv como base
         Object.assign(combined, animeflvData.value);
       }
       
       if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
-        combined.sources.push({
-          name: 'jkanime',
-          data: jkanimeData.value
-        });
-        
-        // Si animeflv falló, usar jkanime como base
         if (!combined.title) {
           Object.assign(combined, jkanimeData.value);
         } else {
-          // Combinar géneros de jkanime si animeflv no tiene o tiene menos
           if (jkanimeData.value.genres && jkanimeData.value.genres.length > 0) {
             if (!combined.genres || combined.genres.length === 0) {
               combined.genres = jkanimeData.value.genres;
             } else {
-              // Combinar géneros únicos
-              const allGenres = [...combined.genres, ...jkanimeData.value.genres];
-              combined.genres = [...new Set(allGenres)];
+              combined.genres = [...new Set([...combined.genres, ...jkanimeData.value.genres])];
             }
           }
         }
         
-        // Combinar episodios únicos
         if (combined.episodes && jkanimeData.value.episodes) {
           const allEpisodes = [...combined.episodes, ...jkanimeData.value.episodes];
           const uniqueEpisodes = [];
@@ -200,11 +182,12 @@ app.get('/api/anime', async (req, res) => {
         }
       }
       
-      // Si ninguna fuente tiene datos, error
       if (!combined.title) {
         return res.status(404).json({ message: 'Anime no encontrado en ninguna fuente' });
       }
       
+      // Sobrescribimos la fuente para indicar que es un resultado mixto
+      combined.source = 'combined'; 
       data = combined;
     }
     res.json(data);
