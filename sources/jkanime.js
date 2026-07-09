@@ -309,37 +309,123 @@ async function getAnimeDetails(id) {
                'Desconocido';
     }
     
-    // Extraer episodios - probar URLs incrementales
-    const episodes = [];
-    
-    // Intentar obtener el número total de episodios del HTML
-    const episodesCountText = $('li:contains("Episodios")').text().match(/\d+/);
-    const totalEpisodes = episodesCountText ? parseInt(episodesCountText[0]) : 0;
-    
-    if (totalEpisodes > 0) {
-      // Generar URLs de episodios basadas en el patrón de jkanime
-      for (let i = 1; i <= totalEpisodes; i++) {
-        episodes.push({
-          number: i.toString(),
-          url: `${BASE_URL}/${id}/${i}/`
+    // Extraer episodios - probar URLs incrementales// Extraer episodios - Múltiples estrategias para JKAnime
+    let episodes = [];
+
+    // ESTRATEGIA 1: Buscar en el HTML las variables JS ocultas (Regex robusto)
+    // No buscamos nombres de variables, buscamos directamente propiedades {"number": X}
+    $('script').each((i, elem) => {
+      const scriptContent = $(elem).html();
+      if (!scriptContent) return;
+
+      // Si el script maneja episodios o contiene arrays con imágenes y números
+      if (scriptContent.includes('number') && (scriptContent.includes('render_caps') || scriptContent.includes('image'))) {
+        // Atrapa patrones como: "number":"1", 'number':'2', number: 3, "number": 4.5
+        const numberMatches = [...scriptContent.matchAll(/['"]?number['"]?\s*:\s*['"]?(\d+(\.\d+)?)['"]?/g)];
+        numberMatches.forEach(match => {
+          const num = match[1];
+          episodes.push({
+            number: num.toString(),
+            url: `${BASE_URL}/${id}/${num}/`
+          });
         });
       }
-    } else {
-      // Fallback: intentar detectar episodios buscando enlaces
+    });
+
+    // ESTRATEGIA 2: Si el script falla, intentar con la API interna (AJAX) de JKAnime
+    // Muchos animes nuevos cargan sus capítulos a través de peticiones asíncronas.
+    if (episodes.length === 0) {
+      // Buscar el ID numérico interno de JKAnime (ej: data-anime="1234")
+      const internalId = $('#guardar-anime').attr('data-anime') || 
+                         $('[data-anime]').attr('data-anime') || 
+                         $('.svea').attr('data-anime');
+                         
+      if (internalId) {
+        try {
+          // Petición al paginador interno
+          const ajaxRes = await axios.get(`${BASE_URL}/ajax/pagination_episodes/${internalId}/1/`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          
+          if (ajaxRes.data && Array.isArray(ajaxRes.data)) {
+            ajaxRes.data.forEach(ep => {
+              if (ep.number) {
+                episodes.push({
+                  number: ep.number.toString(),
+                  url: `${BASE_URL}/${id}/${ep.number}/`
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.log('No se pudo obtener episodios por AJAX interno:', e.message);
+        }
+      }
+    }
+
+    // ESTRATEGIA 3: Buscar enlaces puros renderizados en el HTML
+    // Buscamos estrictamente en la URL para no confundirnos con títulos como "Thunder 3"
+    if (episodes.length === 0) {
       $('a').each((i, elem) => {
         const href = $(elem).attr('href');
-        const text = $(elem).text().trim();
-        
-        // Buscar patrones de episodios en el href o texto
-        if (href && (href.includes('/ver/') || href.match(/episodio/i) || (href.includes(`/${id}/`) && href.match(/\d+\/$/)))) {
-          const epNum = text.match(/\d+/)?.[0] || href.match(/(\d+)\/$/)?.[1] || (i + 1).toString();
-          episodes.push({
-            number: epNum,
-            url: href.startsWith('http') ? href : BASE_URL + href
-          });
+        // Validar que el link pertenezca a este anime y que termine en /un-numero/
+        if (href && href.includes(`/${id}/`) && href.match(/\/\d+\/$/)) {
+          const epNumMatch = href.match(/\/(\d+)\/$/);
+          if (epNumMatch) {
+            episodes.push({
+              number: epNumMatch[1],
+              url: href.startsWith('http') ? href : BASE_URL + href
+            });
+          }
         }
       });
     }
+
+    // ESTRATEGIA 4: Secuencial de emergencia (solo útil para animes ya finalizados)
+    if (episodes.length === 0) {
+      const totalText = $('li:contains("Episodios")').text().match(/\d+/);
+      const total = totalText ? parseInt(totalText[0]) : 0;
+      if (total > 0 && total < 2000) { // Limitamos para evitar bucles infinitos
+        for (let i = 1; i <= total; i++) {
+          episodes.push({
+            number: i.toString(),
+            url: `${BASE_URL}/${id}/${i}/`
+          });
+        }
+      }
+    }
+
+    // Limpiar duplicados y ordenar de menor a mayor
+    // ==========================================
+    // AUTOCOMPLETADO INTELIGENTE DE EPISODIOS
+    // ==========================================
+    if (episodes.length > 0) {
+      // Obtenemos el número de episodio más alto que detectaron las estrategias
+      const maxEpisode = Math.max(...episodes.map(ep => parseFloat(ep.number)));
+      
+      // Si encontró un máximo válido (ej. el 3), generamos del 1 al 3 para rellenar vacíos
+      if (!isNaN(maxEpisode) && maxEpisode > 0 && maxEpisode < 2000) {
+        for (let i = 1; i <= maxEpisode; i++) {
+          episodes.push({
+            number: i.toString(),
+            url: `${BASE_URL}/${id}/${i}/`
+          });
+        }
+      }
+    }
+
+    // Limpiar duplicados y ordenar de menor a mayor
+    const uniqueEpisodes = [];
+    const seenNumbers = new Set();
+    
+    episodes.forEach(ep => {
+      if (!seenNumbers.has(ep.number)) {
+        seenNumbers.add(ep.number);
+        uniqueEpisodes.push(ep);
+      }
+    });
+    
+    const sortedEpisodes = uniqueEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
 
     return {
       id: id,
@@ -348,12 +434,12 @@ async function getAnimeDetails(id) {
       synopsis: synopsis || 'No disponible',
       genres: genres,
       status: status,
-      episodes: episodes,
+      episodes: sortedEpisodes, // Usamos la lista final ordenada y completa
       source: 'jkanime'
     };
-  } catch (error) {
-    console.error('Error en getAnimeDetails JKAnime:', error.message);
-    throw error;
+  } catch (e) {
+    console.log('No se pudo obtener detalles del anime:', e.message);
+    return null;
   }
 }
 
