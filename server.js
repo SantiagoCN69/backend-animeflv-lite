@@ -132,7 +132,7 @@ app.get('/api/search', async (req, res) => {
 
 // Navegar por animes
 app.get('/api/browse', async (req, res) => {
-  const source = req.query.source || 'animeav1';
+  const source = req.query.source || 'jkanime';
   const params = req.url.split('?')[1];
   
   try {
@@ -142,7 +142,7 @@ app.get('/api/browse', async (req, res) => {
     } else if (source === 'jkanime') {
       data = await jkanime.browse(params);
     } else {
-      // Por defecto usar animeav1 para browse
+      // Por defecto usar jkanime para browse
       data = await jkanime.browse(params);
     }
     res.json(data);

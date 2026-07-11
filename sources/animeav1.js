@@ -111,30 +111,66 @@ async function search(query) {
 
 // Navegar por animes (Ya era manual, se optimizan headers)
 async function browse(params) {
-  const fullUrl = `${BASE_URL}/browse?${params}`;
+  // Ajustamos la ruta a /catalogo ya que esa es la nueva URL base para búsquedas
+  // Nota: si tu frontend aún manda 'page=1', se añadirá correctamente como /catalogo?page=1
+  const fullUrl = `${BASE_URL}/catalogo?${params}`;
 
   try {
     const response = await axios.get(fullUrl, { headers: HEADERS });
-    const $ = cheerio.load(response.data);
+    const html = response.data;
+
+    // 1. Extraer el Total de Páginas (Fallback a "1" si no se encuentra)
+    let PaginasTotales = "1";
+    const totalPagesMatch = html.match(/totalPages\s*:\s*(\d+)/);
+    if (totalPagesMatch) {
+      PaginasTotales = totalPagesMatch[1];
+    }
+
+    let animes = [];
+
+    // 2. Extraer el bloque del array 'results'
+    const resultsMatch = html.match(/results\s*:\s*\[(.*?)\]\s*,\s*total\s*:/);
     
-    // Fallback de paginación
-    let PaginasTotales = $('ul.pagination li').eq(-2).text().trim() || "1";
+    if (resultsMatch && resultsMatch[1]) {
+      const resultsStr = resultsMatch[1];
+      
+      // Separamos la cadena de texto por cada anime usando '{id:' como punto de corte
+      const items = resultsStr.split('{id:').slice(1);
 
-    const animes = $('article.Anime').map((i, element) => {
-      const article = $(element);
-      const title = article.find('.Title').text().trim();
-      const type = article.find('.Type').text().trim();
-      const url = article.find('a').attr('href');
-      let cover = article.find('img').attr('src');
+      animes = items.map(item => {
+        // Como cortamos por '{id:', lo primero que queda es el id (ej: '"3812"')
+        const idMatch = item.match(/^"([^"]+)"/); 
+        const titleMatch = item.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+        const slugMatch = item.match(/slug\s*:\s*"([^"]+)"/);
+        const catMatch = item.match(/categoryId\s*:\s*(\d+)/);
 
-      return {
-        title,
-        type,
-        url: url ? (url.startsWith('http') ? url : BASE_URL + url) : null,
-        cover: cover ? (cover.startsWith('http') ? cover : BASE_URL + cover) : null,
-        source: 'animeav1'
-      };
-    }).get();
+        const id = idMatch ? idMatch[1] : '';
+        const title = titleMatch ? titleMatch[1].replace(/\\"/g, '"') : 'Sin título';
+        const slug = slugMatch ? slugMatch[1] : '';
+        const catId = catMatch ? parseInt(catMatch[1]) : 0;
+
+        // Determinar el Tipo de anime según su ID de categoría
+        let type = 'Anime';
+        if (catId === 1) type = 'TV Anime';
+        else if (catId === 2) type = 'Película';
+        else if (catId === 3) type = 'OVA';
+        else if (catId === 4) type = 'Especial';
+
+        // Construir URLs
+        const url = slug ? `${BASE_URL}/media/${slug}` : null;
+        
+        // El CDN de AnimeAV1 suele guardar las portadas usando el ID de la base de datos
+        const cover = id ? `https://cdn.animeav1.com/poster/${id}.jpg` : null;
+
+        return {
+          title,
+          type,
+          url,
+          cover,
+          source: 'animeav1'
+        };
+      }).filter(a => a.url !== null); // Limpiamos cualquier error de extracción
+    }
 
     return { PaginasTotales, animes };
 
