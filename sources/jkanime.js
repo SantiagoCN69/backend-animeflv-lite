@@ -54,8 +54,6 @@ async function getLatestEpisodes() {
             });
         });
 
-        console.log(`JKAnime: ${latest.length} capítulos encontrados`);
-
         return latest;
 
     } catch (error) {
