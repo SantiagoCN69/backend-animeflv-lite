@@ -1,7 +1,7 @@
 const cheerio = require('cheerio');
 const axios = require('axios');
 
-const BASE_URL = 'https://www3.animeav1.net';
+const BASE_URL = 'https://animeav1.com';
 
 // Encabezados estándar para evitar bloqueos básicos
 const HEADERS = {
