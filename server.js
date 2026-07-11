@@ -163,57 +163,71 @@ app.get('/api/anime', async (req, res) => {
   
   try {
     let data;
+    
+    // Búsqueda por fuente específica
     if (source === 'animeav1') {
       data = await animeav1.getAnimeDetails(id);
     } else if (source === 'jkanime') {
       data = await jkanime.getAnimeDetails(id);
     } else {
+      // Búsqueda combinada (all)
       const [animeav1Data, jkanimeData] = await Promise.allSettled([
         animeav1.getAnimeDetails(id),
         jkanime.getAnimeDetails(id)
       ]);
       
-      const combined = {};
-      
-      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
-        Object.assign(combined, animeav1Data.value);
-      }
-      
-      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
-        if (!combined.title) {
-          Object.assign(combined, jkanimeData.value);
-        } else {
-          if (jkanimeData.value.genres && jkanimeData.value.genres.length > 0) {
-            if (!combined.genres || combined.genres.length === 0) {
-              combined.genres = jkanimeData.value.genres;
-            } else {
-              combined.genres = [...new Set([...combined.genres, ...jkanimeData.value.genres])];
-            }
-          }
-        }
-        
-        const episodesV1 = animeav1Data.value?.episodes || [];
-        const episodesJK = jkanimeData.value?.episodes || [];
+      const v1 = animeav1Data.status === 'fulfilled' ? animeav1Data.value : null;
+      const jk = jkanimeData.status === 'fulfilled' ? jkanimeData.value : null;
 
-        // Comparamos cuál tiene más episodios y tomamos esa lista como base
-        if (episodesJK.length >= episodesV1.length) {
-          combined.episodes = episodesJK;
-          combined.source = 'jkanime';
-        } else {
-          combined.episodes = episodesV1;
-          combined.source = 'animeav1';
-        }
-      }
-      
-      if (!combined.title) {
+      if (!v1 && !jk) {
         return res.status(404).json({ message: 'Anime no encontrado en ninguna fuente' });
       }
+
+      // 1. Unir datos básicos (priorizamos la fuente que los tenga)
+      const combined = {
+        id: id,
+        title: v1?.title || jk?.title || id,
+        cover: v1?.cover || jk?.cover || '',
+        banner: v1?.banner || jk?.banner || '', 
+        synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
+        status: v1?.status || jk?.status || 'Desconocido',
+        source: 'combined'
+      };
+
+      // 2. Fusionar géneros sin duplicados
+      const allGenres = [...(v1?.genres || []), ...(jk?.genres || [])];
+      combined.genres = [...new Set(allGenres)];
+
+      // 3. Fusionar episodios inteligentemente (sin duplicados por número)
+      const episodesMap = new Map();
+
+      // Agregamos primero los de JKAnime
+      if (jk?.episodes) {
+        jk.episodes.forEach(ep => {
+          episodesMap.set(ep.number.toString(), ep);
+        });
+      }
+
+      // Luego agregamos los de AnimeAV1
+      // Si el episodio ya existe en el Map, no lo sobreescribe, pero si AV1 
+      // tiene capítulos extra, se agregarán correctamente.
+      if (v1?.episodes) {
+        v1.episodes.forEach(ep => {
+          if (!episodesMap.has(ep.number.toString())) {
+            episodesMap.set(ep.number.toString(), ep);
+          }
+        });
+      }
+
+      // Convertimos el mapa de vuelta a un array y lo ordenamos numéricamente
+      combined.episodes = Array.from(episodesMap.values()).sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
       
-      // Sobrescribimos la fuente para indicar que es un resultado mixto
-      combined.source = 'combined'; 
       data = combined;
     }
+    
+    // Devolver el JSON final
     res.json(data);
+    
   } catch (error) {
     console.error('Error en /api/anime:', error);
     res.status(500).json({ error: error.message });

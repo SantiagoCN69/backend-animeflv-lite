@@ -147,100 +147,91 @@ async function browse(params) {
 // Detalles de anime (Ya era manual)
 async function getAnimeDetails(id) {
   try {
-    const animePageUrl = `${BASE_URL}/anime/${id}`;
+    // La URL de detalles del anime ahora usa /media/ en lugar de /anime/
+    const animePageUrl = `${BASE_URL}/media/${id}`;
     const response = await axios.get(animePageUrl, { headers: HEADERS });
     const html = response.data;
-    const $ = cheerio.load(html);
 
-    let animeTitle = id;
-    let animeSlug = id;
-
-    // Título
-    let h1Title = $('h1.Title').text().trim() || $('h1.anime-title').text().trim() || $('h1.page-title').text().trim();
-    if (h1Title) animeTitle = h1Title;
-
-    // Portada
-    let cover = $('figure.AnimeCover img').attr('src') || $('figure img').first().attr('src');
-    if (cover && !cover.startsWith('http')) cover = BASE_URL + cover;
-
-    // Banner
-    let banner = null;
-    const bannerStyle = $('div.Ficha.fchlt div.Bg').attr('style');
-    if (bannerStyle) {
-      const bannerMatch = bannerStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
-      if (bannerMatch && bannerMatch[1]) {
-        banner = bannerMatch[1].trim();
-        if (!banner.startsWith('http')) banner = BASE_URL + banner;
-      }
+    // Aislar el bloque 'media: {...}' del script SvelteKit para evitar errores
+    let startIndex = html.indexOf('media:{');
+    if (startIndex === -1) startIndex = html.indexOf('"media":{');
+    
+    let chunk = html;
+    if (startIndex !== -1) {
+      // Tomamos un bloque de texto lo suficientemente grande para contener toda la info
+      chunk = html.slice(startIndex, startIndex + 5000); 
     }
 
-    // Sinopsis
-    let synopsis = $('div.Description p').first().text() || 
-                   $('div.container section.Main article.Anime div.Description p').first().text() || 
-                   $('div[class*="sinopsis"] p, div[id*="sinopsis"] p').first().text();
+    // Extraer el Título
+    const titleMatch = chunk.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+    const title = titleMatch ? titleMatch[1] : id;
 
-    // Géneros
+    // Extraer la Sinopsis
+    const synopsisMatch = chunk.match(/synopsis\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+    const synopsis = synopsisMatch 
+      ? synopsisMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') 
+      : 'No disponible';
+
+    // Extraer la Portada
+    const posterMatch = chunk.match(/poster\s*:\s*"([^"]+)"/);
+    let cover = posterMatch ? posterMatch[1] : null;
+    if (cover && !cover.startsWith('http')) {
+      cover = `${BASE_URL}/${cover.replace(/^\//, '')}`;
+    }
+
+    // Extraer el Banner
+    const backdropMatch = chunk.match(/backdrop\s*:\s*"([^"]+)"/);
+    let banner = backdropMatch ? backdropMatch[1] : null;
+
+    // Extraer el Estado (0 = Finalizado, 1 o 2 = En emisión / Próximamente)
+    const statusMatch = chunk.match(/status\s*:\s*(\d+)/);
+    let status = 'Desconocido';
+    if (statusMatch) {
+      const s = parseInt(statusMatch[1]);
+      if (s === 0) status = 'Finalizado';
+      else if (s === 1 || s === 2) status = 'En emisión';
+    }
+
+    // Extraer Géneros
     const genres = [];
-    $('nav.Nvgnrs a').each((i, elem) => {
-      const genreText = $(elem).text().trim();
-      if (genreText) genres.push(genreText);
-    });
+    const genresMatch = chunk.match(/genres\s*:\s*\[(.*?)\]/);
+    if (genresMatch && genresMatch[1]) {
+      // Buscar todos los 'name:"..."' dentro del arreglo de géneros
+      const nameMatches = [...genresMatch[1].matchAll(/name\s*:\s*"([^"]+)"/g)];
+      nameMatches.forEach(m => genres.push(m[1]));
+    }
 
-    let rating = $('span#votes_prmd').text().trim() || 'N/A';
-    let status = $('span.fa-tv').text().trim() || 'Desconocido';
-
-    // Relacionados
-    let related = [];
-    $('ul.ListAnmRel li').each((i, elem) => {
-      const linkText = $(elem).find('a').text().trim();
-      const fullText = $(elem).text().trim();
-      const extraText = fullText.replace(linkText, '').trim();
-
-      if (linkText) {
-        related.push({ title: linkText, relation: extraText });
-      }
-    });
-
-    // Episodios (Extracción por Regex del JS interno)
+    // Extraer Episodios
     let formattedEpisodes = [];
-    try {
-      const episodesRegex = /var episodes = (\s*\[\s*(?:\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*(?:,\s*\[\d+(?:\.\d+)?\s*,\s*\d+\]\s*)*)?\]\s*);/;
-      const episodesMatch = html.match(episodesRegex);
-      if (episodesMatch && episodesMatch[1]) {
-        const episodesData = JSON.parse(episodesMatch[1].replace(/,\s*]/g, ']'));
-
-        if (Array.isArray(episodesData)) {
-          episodesData.sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
-          episodesData.forEach(epPair => {
-            if (Array.isArray(epPair) && epPair.length >= 1) {
-              const epNum = epPair[0];
-              formattedEpisodes.push({ 
-                number: epNum, 
-                url: `${BASE_URL}/ver/${animeSlug}-${epNum}` 
-              });
-            }
-          });
-        }
-      }
-    } catch (e) {
-      console.error(`Error al parsear episodios: ${e.message}`);
+    const episodesMatch = chunk.match(/episodes\s*:\s*\[(.*?)\]/);
+    if (episodesMatch && episodesMatch[1]) {
+      // Buscar todos los 'number: X' dentro del arreglo de episodios
+      const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
+      numMatches.forEach(m => {
+        const epNum = m[1];
+        formattedEpisodes.push({
+          number: epNum.toString(),
+          url: `${BASE_URL}/media/${id}/${epNum}` // Generamos la nueva ruta de SvelteKit
+        });
+      });
+      // Asegurarnos de que los episodios estén ordenados de menor a mayor
+      formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
     }
 
     return {
-      title: animeTitle,
+      id: id,
+      title: title,
       cover: cover || 'No se encontró portada.',
       banner: banner || 'No se encontró banner.',
-      synopsis: synopsis ? synopsis.trim() : 'No se encontró sinopsis.',
+      synopsis: synopsis,
       genres: genres,
-      rating: rating,
       status: status,
-      related: related,
       episodes: formattedEpisodes,
       source: 'animeav1'
     };
 
   } catch (error) {
-    console.error(`Error obteniendo detalles del anime '${id}':`, error.message);
+    console.error(`Error obteniendo detalles del anime '${id}' en AnimeAV1:`, error.message);
     return null;
   }
 }
