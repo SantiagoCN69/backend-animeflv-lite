@@ -18,11 +18,6 @@ function normalizeTitle(title) {
     .trim();
 }
 
-// Últimos capítulos (Scraping Manual)
-// Asegúrate de tener cheerio requerido en la parte superior de animev1.js
-// const cheerio = require('cheerio');
-// const axios = require('axios'); // o fetch
-
 async function getLatestEpisodes() {
   try {
     // Reemplaza esto con tu lógica de fetch/axios hacia la URL principal de AnimeAV1
@@ -73,35 +68,34 @@ async function getLatestEpisodes() {
   }
 }
 
-// Asegúrate de exportarla
-// module.exports = { getLatestEpisodes, ... };
-
-// Buscar anime (Scraping Manual)
 async function search(query) {
   try {
-    // La búsqueda suele ser un query string en /browse
-    const searchUrl = `${BASE_URL}/browse?q=${encodeURIComponent(query)}`;
-    const response = await axios.get(searchUrl, { headers: HEADERS });
+    const searchUrl = `${BASE_URL}/catalogo?search=${encodeURIComponent(query)}`;
+    
+    // Usamos timeout para evitar que la conexión se quede abierta eternamente si el sitio tarda
+    const response = await axios.get(searchUrl, { 
+      headers: HEADERS,
+      timeout: 10000 
+    });
+    
     const $ = cheerio.load(response.data);
     const animes = [];
 
-    $('article.Anime').each((i, element) => {
+    // Selector corregido para la estructura nueva: article.group/item
+    $('article.group\\/item').each((i, element) => {
       const article = $(element);
-      const title = article.find('.Title').text().trim() || article.find('h3').text().trim();
-      const type = article.find('.Type').text().trim();
-      const url = article.find('a').attr('href');
-      const cover = article.find('img').attr('src');
+      
+      const title = article.find('h3').text().trim();
+      const url = article.find('a').first().attr('href');
+      const image = article.find('figure img').attr('src');
+      const type = article.find('.rounded.bg-line').text().trim();
 
       if (title && url) {
-        // Extraer ID de la URL (ej: /anime/shingeki-no-kyojin -> shingeki-no-kyojin)
-        const urlParts = url.split('/').filter(Boolean);
-        const id = urlParts[urlParts.length - 1];
-
         animes.push({
-          id: id,
+          id: url.split('/').pop(),
           title: title,
-          image: cover ? (cover.startsWith('http') ? cover : BASE_URL + cover) : null,
-          url: url.startsWith('http') ? url : BASE_URL + url,
+          image: image, // Mantenemos image según tu estructura
+          url: BASE_URL + url,
           type: type || 'TV',
           source: 'animeav1'
         });
