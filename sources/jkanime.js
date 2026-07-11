@@ -156,7 +156,7 @@ async function search(query) {
         animes.push({
           id: id,
           title: title,
-          image: image ? (image.startsWith('http') ? image : BASE_URL + image) : null,
+          cover: image ? (image.startsWith('http') ? image : BASE_URL + image) : null,
           url: link.startsWith('http') ? link : BASE_URL + link,
           type: type,
           source: 'jkanime'
