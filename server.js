@@ -1,35 +1,60 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const animeflv = require('./sources/animeflv');
+const animeav1 = require('./sources/animeav1');
 const jkanime = require('./sources/jkanime');
 
 app.use(cors());
 
-// Función para deduplicar animes por título normalizado
-// Función para deduplicar animes por ID
+// Función auxiliar para normalizar títulos y hacer una comparación exacta
+function normalizeTitleForCompare(title) {
+  if (!title) return '';
+  // Convierte a minúsculas y elimina todo lo que no sea letra o número (espacios, guiones, dos puntos, etc.)
+  return title.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Función para deduplicar animes por Título
+// Función para deduplicar y FUSIONAR animes por Título
 function deduplicateAnimes(animes) {
   const seen = new Map();
   
-  return animes.filter(anime => {
-    const id = anime.id || animeflv.normalizeTitle(anime.title);
-    
-    if (seen.has(id)) {
-      const existing = seen.get(id);
+  animes.forEach(anime => {
+    const key = normalizeTitleForCompare(anime.title) || anime.id;
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      if (anime.image) {
+        existing.image = anime.image;
+      }
       
-      if (anime.servidores && existing.servidores) {
+      if (anime.cover) {
+        existing.cover = anime.cover;
+      }
+      
+      if (anime.id) {
+        existing.id = anime.id;
+      }
+
+      if (anime.servidores) {
+        existing.servidores = existing.servidores || [];
         const allServers = [...existing.servidores, ...anime.servidores];
-        const uniqueServers = allServers.filter((server, index, self) =>
+        existing.servidores = allServers.filter((server, index, self) =>
           index === self.findIndex(s => s.name === server.name)
         );
-        existing.servidores = uniqueServers;
       }
-      return false; 
-    }
+    } else {
 
-    seen.set(id, anime);
-    return true;
+      const newAnime = { ...anime };
+      
+      if (newAnime.chapter && !newAnime.episode) newAnime.episode = newAnime.chapter;
+      if (newAnime.episode && !newAnime.chapter) newAnime.chapter = newAnime.episode;
+      if (newAnime.cover && !newAnime.image) newAnime.image = newAnime.cover;
+      if (newAnime.image && !newAnime.cover) newAnime.cover = newAnime.image;
+
+      seen.set(key, newAnime);
+    }
   });
+  
+  return Array.from(seen.values());
 }
 
 // Últimos capítulos
@@ -38,14 +63,14 @@ app.get('/api/latest', async (req, res) => {
   try {
     let data;
 
-    if (source === 'animeflv') {
-      data = await animeflv.getLatestEpisodes();
+    if (source === 'animeav1') {
+      data = await animeav1.getLatestEpisodes();
     } else if (source === 'jkanime') {
       data = await jkanime.getLatestEpisodes();
     } else {
-      const [jkanimeData, animeflvData] = await Promise.allSettled([
+      const [jkanimeData, animeav1Data] = await Promise.allSettled([
         jkanime.getLatestEpisodes(),
-        animeflv.getLatestEpisodes()
+        animeav1.getLatestEpisodes()
       ]);
 
       const results = [];
@@ -54,10 +79,10 @@ app.get('/api/latest', async (req, res) => {
         results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
       }
 
-      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
-        results.push(...(Array.isArray(animeflvData.value) ? animeflvData.value : []));
+      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
+        results.push(...(Array.isArray(animeav1Data.value) ? animeav1Data.value : []));
       }
-
+      
       data = deduplicateAnimes(results);
     }
 
@@ -75,22 +100,22 @@ app.get('/api/search', async (req, res) => {
   
   try {
     let data;
-    if (source === 'animeflv') {
-      data = await animeflv.search(query);
+    if (source === 'animeav1') {
+      data = await animeav1.search(query);
     } else if (source === 'jkanime') {
       data = await jkanime.search(query);
     } else {
       // Buscar en todas las fuentes y combinar resultados
-      const [animeflvData, jkanimeData] = await Promise.allSettled([
-        animeflv.search(query),
+      const [animeav1Data, jkanimeData] = await Promise.allSettled([
+        animeav1.search(query),
         jkanime.search(query)
       ]);
       
       const results = [];
-      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
-        // animeflv devuelve {data: [...]} o array directo
-        const animeflvResults = animeflvData.value.data || animeflvData.value;
-        results.push(...(Array.isArray(animeflvResults) ? animeflvResults : []));
+      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
+        // animeav1 devuelve {data: [...]} o array directo
+        const animeav1Results = animeav1Data.value.data || animeav1Data.value;
+        results.push(...(Array.isArray(animeav1Results) ? animeav1Results : []));
       }
       if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
         results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
@@ -107,17 +132,17 @@ app.get('/api/search', async (req, res) => {
 
 // Navegar por animes
 app.get('/api/browse', async (req, res) => {
-  const source = req.query.source || 'animeflv';
+  const source = req.query.source || 'animeav1';
   const params = req.url.split('?')[1];
   
   try {
     let data;
-    if (source === 'animeflv') {
-      data = await animeflv.browse(params);
+    if (source === 'animeav1') {
+      data = await animeav1.browse(params);
     } else if (source === 'jkanime') {
       data = await jkanime.browse(params);
     } else {
-      // Por defecto usar animeflv para browse
+      // Por defecto usar animeav1 para browse
       data = await jkanime.browse(params);
     }
     res.json(data);
@@ -126,8 +151,8 @@ app.get('/api/browse', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// Detalles de anime
 
+// Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
   const source = req.query.source || 'all';
@@ -138,20 +163,20 @@ app.get('/api/anime', async (req, res) => {
   
   try {
     let data;
-    if (source === 'animeflv') {
-      data = await animeflv.getAnimeDetails(id);
+    if (source === 'animeav1') {
+      data = await animeav1.getAnimeDetails(id);
     } else if (source === 'jkanime') {
       data = await jkanime.getAnimeDetails(id);
     } else {
-      const [animeflvData, jkanimeData] = await Promise.allSettled([
-        animeflv.getAnimeDetails(id),
+      const [animeav1Data, jkanimeData] = await Promise.allSettled([
+        animeav1.getAnimeDetails(id),
         jkanime.getAnimeDetails(id)
       ]);
       
       const combined = {};
       
-      if (animeflvData.status === 'fulfilled' && animeflvData.value) {
-        Object.assign(combined, animeflvData.value);
+      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
+        Object.assign(combined, animeav1Data.value);
       }
       
       if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
@@ -167,17 +192,17 @@ app.get('/api/anime', async (req, res) => {
           }
         }
         
-const episodesFLV = animeflvData.value?.episodes || [];
-const episodesJK = jkanimeData.value?.episodes || [];
+        const episodesV1 = animeav1Data.value?.episodes || [];
+        const episodesJK = jkanimeData.value?.episodes || [];
 
-// Comparamos cuál tiene más episodios y tomamos esa lista como base
-if (episodesJK.length >= episodesFLV.length) {
-  combined.episodes = episodesJK;
-  combined.source = 'jkanime';
-} else {
-  combined.episodes = episodesFLV;
-  combined.source = 'animeflv';
-}
+        // Comparamos cuál tiene más episodios y tomamos esa lista como base
+        if (episodesJK.length >= episodesV1.length) {
+          combined.episodes = episodesJK;
+          combined.source = 'jkanime';
+        } else {
+          combined.episodes = episodesV1;
+          combined.source = 'animeav1';
+        }
       }
       
       if (!combined.title) {
@@ -207,8 +232,8 @@ app.get('/api/episode', async (req, res) => {
 
   try {
     let data;
-    if (source === 'animeflv') {
-      data = await animeflv.getEpisodeLinks(url);
+    if (source === 'animeav1') {
+      data = await animeav1.getEpisodeLinks(url);
     } else if (source === 'jkanime') {
       data = await jkanime.getEpisodeLinks(url);
     } else {
@@ -216,10 +241,10 @@ app.get('/api/episode', async (req, res) => {
       const results = [];
       
       // Detectar fuente por URL y obtener servidores
-      if (url.includes('animeflv')) {
-        const animeflvData = await animeflv.getEpisodeLinks(url);
-        if (animeflvData.servidores) {
-          results.push(...animeflvData.servidores.map(s => ({ ...s, source: 'animeflv' })));
+      if (url.includes('animeav1')) {
+        const animeav1Data = await animeav1.getEpisodeLinks(url);
+        if (animeav1Data.servidores) {
+          results.push(...animeav1Data.servidores.map(s => ({ ...s, source: 'animeav1' })));
         }
       } else if (url.includes('jkanime')) {
         const jkanimeData = await jkanime.getEpisodeLinks(url);
@@ -227,14 +252,14 @@ app.get('/api/episode', async (req, res) => {
           results.push(...jkanimeData.servidores.map(s => ({ ...s, source: 'jkanime' })));
         }
       } else {
-        // Si no se puede detectar, intentar con animeflv
+        // Si no se puede detectar, intentar con animeav1
         try {
-          const animeflvData = await animeflv.getEpisodeLinks(url);
-          if (animeflvData.servidores) {
-            results.push(...animeflvData.servidores.map(s => ({ ...s, source: 'animeflv' })));
+          const animeav1Data = await animeav1.getEpisodeLinks(url);
+          if (animeav1Data.servidores) {
+            results.push(...animeav1Data.servidores.map(s => ({ ...s, source: 'animeav1' })));
           }
         } catch (e) {
-          console.log('Error con animeflv, intentando jkanime');
+          console.log('Error con animeav1, intentando jkanime');
         }
       }
       
@@ -261,6 +286,7 @@ app.get('/api/episode', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // Ejemplo de unión de servidores (endpoint de prueba)
 app.get('/api/example/servers', async (req, res) => {
   // Ejemplo simulado de cómo se unen los servidores
@@ -291,7 +317,7 @@ app.get('/api/example/servers', async (req, res) => {
   });
 });
 
-//obtener los animes por horarios
+// obtener los animes por horarios
 app.get('/api/schedule', async (req, res) => {
   try {
     const data = await jkanime.getSchedule();
@@ -301,6 +327,7 @@ app.get('/api/schedule', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
