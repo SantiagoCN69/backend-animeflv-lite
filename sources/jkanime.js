@@ -444,7 +444,6 @@ async function getAnimeDetails(id) {
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
-    console.log("🔗 URL:", url);
 
     const response = await axios.get(url, {
       headers: {
@@ -510,12 +509,6 @@ async function getEpisodeLinks(url) {
           }
         });
       }
-    });
-
-    console.log("\n📊 TOTAL SERVIDORES:", servidores.length);
-
-    servidores.forEach((s, i) => {
-      console.log(`[${i}] ${s.type} -> ${s.name} -> ${s.url}`);
     });
 
     if (servidores.length === 0) {

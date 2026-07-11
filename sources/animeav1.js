@@ -246,40 +246,54 @@ async function getAnimeDetails(id) {
 }
 
 // Obtener enlaces de video de un episodio
+// Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
     const resp = await axios.get(url, { headers: HEADERS });
+    const html = resp.data;
+
+    // Buscar el bloque de 'embeds' dentro del script de SvelteKit
+    // Buscamos todo lo que está entre "embeds:{" y "downloads:" o "uses:"
+    const embedsMatch = html.match(/embeds\s*:\s*{(.*?)}\s*,\s*(?:downloads|uses)\s*:/);
     
-    // Extracción de variables embebidas (típico de este sitio)
-    const videosMatch = resp.data.match(/var videos = ({.*?});/s);
-    if (!videosMatch) {
-      throw new Error('No se encontró la variable de videos (Probablemente cloudflare o cambio de estructura)');
+    if (!embedsMatch) {
+      throw new Error('No se encontró el bloque embeds (Posible cambio de estructura)');
     }
 
+    const embedsBlock = embedsMatch[1];
     let servidores = [];
-    try {
-      const videosObj = JSON.parse(videosMatch[1]);
-      // Extraer los subtitulados (SUB) y, si existen, latinos (LAT)
-      if (videosObj.SUB && Array.isArray(videosObj.SUB)) {
-        servidores.push(...videosObj.SUB.map(srv => ({ name: srv.server, code: srv.code })));
+
+    // Función auxiliar para extraer servidores usando Regex
+    const extractServers = (block, suffix) => {
+      // Extrae el nombre del servidor y la URL
+      const serversRegex = /server\s*:\s*"([^"]+)"\s*,\s*url\s*:\s*"([^"]+)"/g;
+      let match;
+      while ((match = serversRegex.exec(block)) !== null) {
+        servidores.push({
+          name: suffix ? `${match[1]} ${suffix}` : match[1],
+          url: match[2]
+        });
       }
-      if (videosObj.LAT && Array.isArray(videosObj.LAT)) {
-        servidores.push(...videosObj.LAT.map(srv => ({ name: srv.server + ' (Lat)', code: srv.code })));
-      }
-    } catch (e) {
-      throw new Error('Error al parsear los JSON de los videos');
-    }
+    };
+
+    // Extraer primero los latinos (DUB) si prefieres que salgan arriba, o los SUB
+    const dubMatch = embedsBlock.match(/DUB\s*:\s*\[(.*?)\]/);
+    if (dubMatch) extractServers(dubMatch[1], "(Lat)");
+
+    // Extraer subtitulados (SUB)
+    const subMatch = embedsBlock.match(/SUB\s*:\s*\[(.*?)\]/);
+    if (subMatch) extractServers(subMatch[1], "(Sub)");
 
     if (servidores.length === 0) {
       throw new Error('No se encontraron links de video útiles');
     }
 
     return { 
-      video: servidores[0].code, 
+      video: servidores[0].url, 
       servidores 
     };
   } catch (error) {
-    console.error("Error obteniendo links del episodio:", error.message);
+    console.error("Error obteniendo links del episodio en AnimeAV1:", error.message);
     throw error;
   }
 }

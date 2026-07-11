@@ -223,47 +223,46 @@ app.get('/api/anime', async (req, res) => {
 
 // Obtener los enlaces de video de un episodio
 app.get('/api/episode', async (req, res) => {
-  const url = req.query.url;
+  const animeid = req.query.animeid;
+  const cap = req.query.cap;
   const source = req.query.source || 'all';
   
-  if (!url) {
-    return res.status(400).json({ error: 'Falta el parámetro url' });
+  if (!animeid || !cap) {
+    return res.status(400).json({ error: 'Faltan los parámetros animeid y/o cap' });
   }
+
+  // Construimos dinámicamente las URLs según la estructura de cada página
+  const urlAnimeAv1 = `https://animeav1.com/media/${animeid}/${cap}`;
+  const urlJkAnime = `https://jkanime.net/${animeid}/${cap}/`;
+  
 
   try {
     let data;
+    
     if (source === 'animeav1') {
-      data = await animeav1.getEpisodeLinks(url);
+      data = await animeav1.getEpisodeLinks(urlAnimeAv1);
     } else if (source === 'jkanime') {
-      data = await jkanime.getEpisodeLinks(url);
+      data = await jkanime.getEpisodeLinks(urlJkAnime);
     } else {
-      // Buscar en ambas fuentes y unir servidores
+      // Buscar en ambas fuentes simultáneamente y unir servidores
+      const [animeav1Data, jkanimeData] = await Promise.allSettled([
+        animeav1.getEpisodeLinks(urlAnimeAv1),
+        jkanime.getEpisodeLinks(urlJkAnime)
+      ]);
+      
       const results = [];
       
-      // Detectar fuente por URL y obtener servidores
-      if (url.includes('animeav1')) {
-        const animeav1Data = await animeav1.getEpisodeLinks(url);
-        if (animeav1Data.servidores) {
-          results.push(...animeav1Data.servidores.map(s => ({ ...s, source: 'animeav1' })));
-        }
-      } else if (url.includes('jkanime')) {
-        const jkanimeData = await jkanime.getEpisodeLinks(url);
-        if (jkanimeData.servidores) {
-          results.push(...jkanimeData.servidores.map(s => ({ ...s, source: 'jkanime' })));
-        }
-      } else {
-        // Si no se puede detectar, intentar con animeav1
-        try {
-          const animeav1Data = await animeav1.getEpisodeLinks(url);
-          if (animeav1Data.servidores) {
-            results.push(...animeav1Data.servidores.map(s => ({ ...s, source: 'animeav1' })));
-          }
-        } catch (e) {
-          console.log('Error con animeav1, intentando jkanime');
-        }
+      // Procesar resultados de JKAnime (ahora los agregamos primero)
+      if (jkanimeData.status === 'fulfilled' && jkanimeData.value && jkanimeData.value.servidores) {
+        results.push(...jkanimeData.value.servidores.map(s => ({ ...s, source: 'jkanime' })));
+      }
+
+      // Procesar resultados de AnimeAV1 (ahora van después)
+      if (animeav1Data.status === 'fulfilled' && animeav1Data.value && animeav1Data.value.servidores) {
+        results.push(...animeav1Data.value.servidores.map(s => ({ ...s, source: 'animeav1' })));
       }
       
-      // Unir servidores únicos por nombre
+      // Unir servidores únicos por nombre para evitar duplicados
       const uniqueServers = [];
       const seen = new Map();
       
@@ -274,6 +273,10 @@ app.get('/api/episode', async (req, res) => {
           uniqueServers.push(server);
         }
       });
+
+      if (uniqueServers.length === 0) {
+        throw new Error('No se encontraron enlaces de video en ninguna de las fuentes para este episodio.');
+      }
       
       data = {
         video: uniqueServers[0]?.url,
