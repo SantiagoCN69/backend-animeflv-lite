@@ -198,6 +198,11 @@ async function getAnimeDetails(id) {
       chunk = html.slice(startIndex, startIndex + 5000); 
     }
 
+    // 1. Extraer el ID numérico interno (ej: 4425) para usarlo en la portada
+    // Como cortamos el texto en 'media:{', el primer 'id' que aparece es el numérico
+    const internalIdMatch = chunk.match(/id\s*:\s*(\d+)/);
+    const internalId = internalIdMatch ? internalIdMatch[1] : null;
+
     // Extraer el Título
     const titleMatch = chunk.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
     const title = titleMatch ? titleMatch[1] : id;
@@ -208,11 +213,16 @@ async function getAnimeDetails(id) {
       ? synopsisMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') 
       : 'No disponible';
 
-    // Extraer la Portada
+    // Extraer la Portada con Fallback al CDN
     const posterMatch = chunk.match(/poster\s*:\s*"([^"]+)"/);
     let cover = posterMatch ? posterMatch[1] : null;
+    
     if (cover && !cover.startsWith('http')) {
+      // Si hay cover y es ruta relativa
       cover = `${BASE_URL}/${cover.replace(/^\//, '')}`;
+    } else if (!cover && internalId) {
+      // Si el cover es nulo, armamos la URL usando el ID numérico y el CDN
+      cover = `https://cdn.animeav1.com/covers/${internalId}.jpg`;
     }
 
     // Extraer el Banner
@@ -271,7 +281,6 @@ async function getAnimeDetails(id) {
     return null;
   }
 }
-
 // Obtener enlaces de video de un episodio
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
