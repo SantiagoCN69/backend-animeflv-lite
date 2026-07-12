@@ -272,12 +272,13 @@ async function getAnimeDetails(id) {
         relBlocks.forEach(m => {
           const typeCode = parseInt(m[1]);
           const destBlock = m[2]; 
-
+          const idMatch = destBlock.match(/id\s*:\s*(\d+)/);
           const slugMatch = destBlock.match(/slug\s*:\s*"([^"]+)"/);
           const relDateMatch = destBlock.match(/startDate\s*:\s*"([^"]+)"/);
 
           if (slugMatch) {
             formattedRelations.push({
+              id: idMatch ? idMatch[1] : null,
               slug: slugMatch[1],
               type: typeCode,      // Solo mandamos el número
               startDate: relDateMatch ? relDateMatch[1] : null
