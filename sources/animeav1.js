@@ -21,7 +21,10 @@ function normalizeTitle(title) {
 async function getLatestEpisodes() {
   try {
     // Reemplaza esto con tu lógica de fetch/axios hacia la URL principal de AnimeAV1
-    const response = await axios.get('https://animeav1.com'); // Asegúrate de usar la URL correcta
+    const response = await axios.get('https://animeav1.com', { 
+      headers: HEADERS,
+      timeout: 15000
+    });
     const $ = cheerio.load(response.data);
     const episodes = [];
 
@@ -116,7 +119,10 @@ async function browse(params) {
   const fullUrl = `${BASE_URL}/catalogo?${params}`;
 
   try {
-    const response = await axios.get(fullUrl, { headers: HEADERS });
+    const response = await axios.get(fullUrl, { 
+      headers: HEADERS,
+      timeout: 15000
+    });
     const html = response.data;
 
     // 1. Extraer el Total de Páginas (Fallback a "1" si no se encuentra)
@@ -184,7 +190,10 @@ async function browse(params) {
 async function getAnimeDetails(id) {
   try {
     const animePageUrl = `${BASE_URL}/media/${id}`;
-    const response = await axios.get(animePageUrl, { headers: HEADERS });
+    const response = await axios.get(animePageUrl, { 
+      headers: HEADERS,
+      timeout: 15000
+    });
     const html = response.data;
 
     let startIndex = html.indexOf('media:{');
@@ -316,7 +325,10 @@ async function getAnimeDetails(id) {
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
-    const resp = await axios.get(url, { headers: HEADERS });
+    const resp = await axios.get(url, { 
+      headers: HEADERS,
+      timeout: 15000
+    });
     const html = resp.data;
 
     // Buscar el bloque de 'embeds' dentro del script de SvelteKit
