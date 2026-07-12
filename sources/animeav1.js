@@ -243,18 +243,31 @@ async function getAnimeDetails(id) {
       nameMatches.forEach(m => genres.push(m[1]));
     }
 
+// --- Extraer Episodios ---
     let formattedEpisodes = [];
-    const episodesMatch = chunk.match(/episodes\s*:\s*\[(.*?)\]/);
+
+    // Usamos una Regex que busca el bloque "episodes:[{...}]" 
+    // sin depender de un slice fijo.
+    const episodesMatch = html.match(/episodes\s*:\s*(\[.*?\])/s);
+
     if (episodesMatch && episodesMatch[1]) {
-      const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
-      numMatches.forEach(m => {
-        const epNum = m[1];
-        formattedEpisodes.push({
-          number: epNum.toString(),
-          url: `${BASE_URL}/media/${id}/${epNum}`
-        });
-      });
-      formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
+        try {
+            // Extraer todos los números de episodio presentes
+            const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
+            
+            numMatches.forEach(m => {
+                const epNum = m[1];
+                formattedEpisodes.push({
+                    number: epNum.toString(),
+                    url: `${BASE_URL}/media/${id}/${epNum}`
+                });
+            });
+
+            // Si los episodios no estaban ordenados, los ordenamos
+            formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
+        } catch (e) {
+            console.error("Error procesando la lista de episodios:", e);
+        }
     }
 
     return {
