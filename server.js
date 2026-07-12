@@ -190,6 +190,7 @@ app.get('/api/anime', async (req, res) => {
         cover: jk?.cover || v1?.cover || '',
         banner: jk?.banner || v1?.banner || '', 
         synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
+        category: v1?.category || jk?.category || 'Desconocido',
         status: v1?.status || jk?.status || 'Desconocido',
         startDate: v1?.startDate || jk?.startDate || null,
         endDate: v1?.endDate || jk?.endDate || null,
