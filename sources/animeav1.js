@@ -206,7 +206,9 @@ async function getAnimeDetails(id) {
       ? synopsisMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') 
       : 'No disponible';
 
-    // Extracción de Portada (Cover)
+    const startDateMatch = chunk.match(/startDate\s*:\s*"([^"]+)"/);
+    const startDate = startDateMatch ? startDateMatch[1] : null;
+
     const posterMatch = chunk.match(/poster\s*:\s*"([^"]+)"/);
     let cover = posterMatch ? posterMatch[1] : null;
     
@@ -216,17 +218,14 @@ async function getAnimeDetails(id) {
       cover = `https://cdn.animeav1.com/covers/${internalId}.jpg`;
     }
 
-    // --- NUEVA LÓGICA PARA BANNER ---
     const backdropMatch = chunk.match(/backdrop\s*:\s*"([^"]+)"/);
     let banner = backdropMatch ? backdropMatch[1] : null;
 
     if (banner && !banner.startsWith('http')) {
       banner = `${BASE_URL}/${banner.replace(/^\//, '')}`;
     } else if (!banner && internalId) {
-      // Fallback usando el internalId según tu requerimiento
       banner = `https://cdn.animeav1.com/backdrops/${internalId}.jpg`;
     }
-    // --------------------------------
 
     const statusMatch = chunk.match(/status\s*:\s*(\d+)/);
     let status = 'Desconocido';
@@ -243,31 +242,51 @@ async function getAnimeDetails(id) {
       nameMatches.forEach(m => genres.push(m[1]));
     }
 
-// --- Extraer Episodios ---
     let formattedEpisodes = [];
-
-    // Usamos una Regex que busca el bloque "episodes:[{...}]" 
-    // sin depender de un slice fijo.
     const episodesMatch = html.match(/episodes\s*:\s*(\[.*?\])/s);
 
     if (episodesMatch && episodesMatch[1]) {
-        try {
-            // Extraer todos los números de episodio presentes
-            const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
-            
-            numMatches.forEach(m => {
-                const epNum = m[1];
-                formattedEpisodes.push({
-                    number: epNum.toString(),
-                    url: `${BASE_URL}/media/${id}/${epNum}`
-                });
-            });
+      try {
+        const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
+        numMatches.forEach(m => {
+          const epNum = m[1];
+          formattedEpisodes.push({
+            number: epNum.toString(),
+            url: `${BASE_URL}/media/${id}/${epNum}`
+          });
+        });
+        formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
+      } catch (e) {
+        console.error("Error procesando episodios:", e);
+      }
+    }
 
-            // Si los episodios no estaban ordenados, los ordenamos
-            formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
-        } catch (e) {
-            console.error("Error procesando la lista de episodios:", e);
-        }
+    // --- Extraer Relaciones (Solo slug, type y startDate) ---
+    let formattedRelations = [];
+    const relationsMatch = html.match(/relations\s*:\s*\[(.*?)\](?=\}\}|,\s*[a-zA-Z0-9_]+\s*:)/s);
+
+    if (relationsMatch && relationsMatch[1]) {
+      try {
+        const relBlocks = [...relationsMatch[1].matchAll(/type\s*:\s*(\d+).*?destination\s*:\s*\{([^}]+)\}/gs)];
+        
+        relBlocks.forEach(m => {
+          const typeCode = parseInt(m[1]);
+          const destBlock = m[2]; 
+
+          const slugMatch = destBlock.match(/slug\s*:\s*"([^"]+)"/);
+          const relDateMatch = destBlock.match(/startDate\s*:\s*"([^"]+)"/);
+
+          if (slugMatch) {
+            formattedRelations.push({
+              slug: slugMatch[1],
+              type: typeCode,      // Solo mandamos el número
+              startDate: relDateMatch ? relDateMatch[1] : null
+            });
+          }
+        });
+      } catch (e) {
+        console.error("Error procesando relaciones:", e);
+      }
     }
 
     return {
@@ -278,16 +297,17 @@ async function getAnimeDetails(id) {
       synopsis: synopsis,
       genres: genres,
       status: status,
+      startDate: startDate, 
       episodes: formattedEpisodes,
+      relations: formattedRelations, 
       source: 'animeav1'
     };
 
   } catch (error) {
-    console.error(`Error obteniendo detalles del anime '${id}' en AnimeAV1:`, error.message);
+    console.error(`Error obteniendo detalles:`, error.message);
     return null;
   }
 }
-// Obtener enlaces de video de un episodio
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
