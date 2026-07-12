@@ -183,53 +183,51 @@ async function browse(params) {
 // Detalles de anime (Ya era manual)
 async function getAnimeDetails(id) {
   try {
-    // La URL de detalles del anime ahora usa /media/ en lugar de /anime/
     const animePageUrl = `${BASE_URL}/media/${id}`;
     const response = await axios.get(animePageUrl, { headers: HEADERS });
     const html = response.data;
 
-    // Aislar el bloque 'media: {...}' del script SvelteKit para evitar errores
     let startIndex = html.indexOf('media:{');
     if (startIndex === -1) startIndex = html.indexOf('"media":{');
     
     let chunk = html;
     if (startIndex !== -1) {
-      // Tomamos un bloque de texto lo suficientemente grande para contener toda la info
       chunk = html.slice(startIndex, startIndex + 5000); 
     }
 
-    // 1. Extraer el ID numérico interno (ej: 4425) para usarlo en la portada
-    // Como cortamos el texto en 'media:{', el primer 'id' que aparece es el numérico
     const internalIdMatch = chunk.match(/id\s*:\s*(\d+)/);
     const internalId = internalIdMatch ? internalIdMatch[1] : null;
 
-    // Extraer el Título
     const titleMatch = chunk.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
     const title = titleMatch ? titleMatch[1] : id;
 
-    // Extraer la Sinopsis
     const synopsisMatch = chunk.match(/synopsis\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
     const synopsis = synopsisMatch 
       ? synopsisMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') 
       : 'No disponible';
 
-    // Extraer la Portada con Fallback al CDN
+    // Extracción de Portada (Cover)
     const posterMatch = chunk.match(/poster\s*:\s*"([^"]+)"/);
     let cover = posterMatch ? posterMatch[1] : null;
     
     if (cover && !cover.startsWith('http')) {
-      // Si hay cover y es ruta relativa
       cover = `${BASE_URL}/${cover.replace(/^\//, '')}`;
     } else if (!cover && internalId) {
-      // Si el cover es nulo, armamos la URL usando el ID numérico y el CDN
       cover = `https://cdn.animeav1.com/covers/${internalId}.jpg`;
     }
 
-    // Extraer el Banner
+    // --- NUEVA LÓGICA PARA BANNER ---
     const backdropMatch = chunk.match(/backdrop\s*:\s*"([^"]+)"/);
     let banner = backdropMatch ? backdropMatch[1] : null;
 
-    // Extraer el Estado (0 = Finalizado, 1 o 2 = En emisión / Próximamente)
+    if (banner && !banner.startsWith('http')) {
+      banner = `${BASE_URL}/${banner.replace(/^\//, '')}`;
+    } else if (!banner && internalId) {
+      // Fallback usando el internalId según tu requerimiento
+      banner = `https://cdn.animeav1.com/backdrops/${internalId}.jpg`;
+    }
+    // --------------------------------
+
     const statusMatch = chunk.match(/status\s*:\s*(\d+)/);
     let status = 'Desconocido';
     if (statusMatch) {
@@ -238,29 +236,24 @@ async function getAnimeDetails(id) {
       else if (s === 1 || s === 2) status = 'En emisión';
     }
 
-    // Extraer Géneros
     const genres = [];
     const genresMatch = chunk.match(/genres\s*:\s*\[(.*?)\]/);
     if (genresMatch && genresMatch[1]) {
-      // Buscar todos los 'name:"..."' dentro del arreglo de géneros
       const nameMatches = [...genresMatch[1].matchAll(/name\s*:\s*"([^"]+)"/g)];
       nameMatches.forEach(m => genres.push(m[1]));
     }
 
-    // Extraer Episodios
     let formattedEpisodes = [];
     const episodesMatch = chunk.match(/episodes\s*:\s*\[(.*?)\]/);
     if (episodesMatch && episodesMatch[1]) {
-      // Buscar todos los 'number: X' dentro del arreglo de episodios
       const numMatches = [...episodesMatch[1].matchAll(/number\s*:\s*(\d+(?:\.\d+)?)/g)];
       numMatches.forEach(m => {
         const epNum = m[1];
         formattedEpisodes.push({
           number: epNum.toString(),
-          url: `${BASE_URL}/media/${id}/${epNum}` // Generamos la nueva ruta de SvelteKit
+          url: `${BASE_URL}/media/${id}/${epNum}`
         });
       });
-      // Asegurarnos de que los episodios estén ordenados de menor a mayor
       formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
     }
 
