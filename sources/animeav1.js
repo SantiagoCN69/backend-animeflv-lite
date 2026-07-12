@@ -160,7 +160,7 @@ async function browse(params) {
         const url = slug ? `${BASE_URL}/media/${slug}` : null;
         
         // El CDN de AnimeAV1 suele guardar las portadas usando el ID de la base de datos
-        const cover = id ? `https://cdn.animeav1.com/poster/${id}.jpg` : null;
+        const cover = id ? `https://cdn.animeav1.com/covers/${id}.jpg` : null;
 
         return {
           title,
