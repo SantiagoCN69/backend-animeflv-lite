@@ -235,6 +235,9 @@ async function getAnimeDetails(id) {
       else if (s === 1 || s === 2) status = 'En emisión';
     }
 
+    const categoryMatch = chunk.match(/category\s*:\s*\{[^}]*name\s*:\s*"([^"]+)"/);
+    const category = categoryMatch ? categoryMatch[1] : 'Desconocido';
+
     const genres = [];
     const genresMatch = chunk.match(/genres\s*:\s*\[(.*?)\]/);
     if (genresMatch && genresMatch[1]) {
@@ -297,6 +300,7 @@ async function getAnimeDetails(id) {
       banner: banner || null,
       synopsis: synopsis,
       genres: genres,
+      category: category,
       status: status,
       startDate: startDate, 
       episodes: formattedEpisodes,
