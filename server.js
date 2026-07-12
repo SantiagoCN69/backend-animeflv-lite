@@ -13,7 +13,6 @@ function normalizeTitleForCompare(title) {
   return title.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-// Función para deduplicar animes por Título
 // Función para deduplicar y FUSIONAR animes por Título
 function deduplicateAnimes(animes) {
   const seen = new Map();
@@ -184,6 +183,7 @@ app.get('/api/anime', async (req, res) => {
       }
 
       // 1. Unir datos básicos (priorizamos la fuente que los tenga)
+      // AQUÍ SE AGREGAN STARTDATE, ENDDATE Y RELATIONS
       const combined = {
         id: id,
         title: v1?.title || jk?.title || id,
@@ -191,6 +191,9 @@ app.get('/api/anime', async (req, res) => {
         banner: jk?.banner || v1?.banner || '', 
         synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
         status: v1?.status || jk?.status || 'Desconocido',
+        startDate: v1?.startDate || jk?.startDate || null,
+        endDate: v1?.endDate || jk?.endDate || null,
+        relations: v1?.relations || jk?.relations || [],
         source: 'combined'
       };
 
@@ -209,8 +212,6 @@ app.get('/api/anime', async (req, res) => {
       }
 
       // Luego agregamos los de AnimeAV1
-      // Si el episodio ya existe en el Map, no lo sobreescribe, pero si AV1 
-      // tiene capítulos extra, se agregarán correctamente.
       if (v1?.episodes) {
         v1.episodes.forEach(ep => {
           if (!episodesMap.has(ep.number.toString())) {
