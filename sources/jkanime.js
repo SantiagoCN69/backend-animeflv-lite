@@ -429,7 +429,7 @@ async function getAnimeDetails(id) {
       id: id,
       title: title,
       cover: cover ? (cover.startsWith('http') ? cover : BASE_URL + cover) : null,
-      synopsis: synopsis || 'No disponible',
+      synopsis: synopsis || null,
       genres: genres,
       status: status,
       episodes: sortedEpisodes, // Usamos la lista final ordenada y completa

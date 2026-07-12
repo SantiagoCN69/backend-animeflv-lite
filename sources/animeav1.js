@@ -273,8 +273,8 @@ async function getAnimeDetails(id) {
     return {
       id: id,
       title: title,
-      cover: cover || 'No se encontró portada.',
-      banner: banner || 'No se encontró banner.',
+      cover: cover || null,
+      banner: banner || null,
       synopsis: synopsis,
       genres: genres,
       status: status,

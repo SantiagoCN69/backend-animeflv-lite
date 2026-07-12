@@ -187,8 +187,8 @@ app.get('/api/anime', async (req, res) => {
       const combined = {
         id: id,
         title: v1?.title || jk?.title || id,
-        cover: v1?.cover || jk?.cover || '',
-        banner: v1?.banner || jk?.banner || '', 
+        cover: jk?.cover || v1?.cover || '',
+        banner: jk?.banner || v1?.banner || '', 
         synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
         status: v1?.status || jk?.status || 'Desconocido',
         source: 'combined'
