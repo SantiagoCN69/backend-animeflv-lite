@@ -202,9 +202,9 @@ async function getAnimeDetails(id) {
     
     let chunk = html;
     if (mediaStartMatch) {
-      // Tomamos desde donde empieza el 'media:{' hasta 20,000 caracteres adelante.
-      // Aumentamos esto porque 5,000 a veces corta los episodios o las relaciones.
-      chunk = html.slice(mediaStartMatch.index, mediaStartMatch.index + 20000); 
+      // Tomamos desde donde empieza el 'media:{' hasta 100,000 caracteres adelante.
+      // Aumentamos esto porque los arrays de episodios y relaciones son muy largos.
+      chunk = html.slice(mediaStartMatch.index, mediaStartMatch.index + 100000); 
     }
 
     // --- 2. Extraer el ID interno como primer dato del chunk ---
@@ -261,7 +261,7 @@ async function getAnimeDetails(id) {
     }
 
     let formattedEpisodes = [];
-    const episodesMatch = chunk.match(/episodes\s*:\s*(\[.*?\])/s);
+    const episodesMatch = chunk.match(/episodes\s*:\s*(\[.*\])/s);
 
     if (episodesMatch && episodesMatch[1]) {
       try {
@@ -281,7 +281,7 @@ async function getAnimeDetails(id) {
 
     // --- Extraer Relaciones ---
     let formattedRelations = [];
-    const relationsMatch = chunk.match(/relations\s*:\s*\[(.*?)\](?=\}\}|,\s*[a-zA-Z0-9_]+\s*:)/s);
+    const relationsMatch = chunk.match(/relations\s*:\s*\[(.*)\](?=\}\}|,\s*[a-zA-Z0-9_]+\s*:)/s);
 
     if (relationsMatch && relationsMatch[1]) {
       try {
