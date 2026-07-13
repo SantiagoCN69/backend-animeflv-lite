@@ -196,17 +196,23 @@ async function getAnimeDetails(id) {
     });
     const html = response.data;
 
-    let startIndex = html.indexOf('media:{');
-    if (startIndex === -1) startIndex = html.indexOf('"media":{');
+    // --- 1. Aislar el bloque exacto de "media" ---
+    // Usamos regex para encontrar el inicio sin importar si tiene comillas o espacios
+    const mediaStartMatch = html.match(/(?:"media"|media)\s*:\s*\{/);
     
     let chunk = html;
-    if (startIndex !== -1) {
-      chunk = html.slice(startIndex, startIndex + 5000); 
+    if (mediaStartMatch) {
+      // Tomamos desde donde empieza el 'media:{' hasta 20,000 caracteres adelante.
+      // Aumentamos esto porque 5,000 a veces corta los episodios o las relaciones.
+      chunk = html.slice(mediaStartMatch.index, mediaStartMatch.index + 20000); 
     }
 
-    const internalIdMatch = chunk.match(/id\s*:\s*(\d+)/);
+    // --- 2. Extraer el ID interno como primer dato del chunk ---
+    // Como ya estamos dentro del bloque 'media', el primer 'id' que encuentre será el correcto.
+    const internalIdMatch = chunk.match(/(?:"id"|id)\s*:\s*(\d+)/);
     const internalId = internalIdMatch ? internalIdMatch[1] : null;
 
+    // --- 3. Extraer el resto de las propiedades ---
     const titleMatch = chunk.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
     const title = titleMatch ? titleMatch[1] : id;
 
@@ -255,7 +261,7 @@ async function getAnimeDetails(id) {
     }
 
     let formattedEpisodes = [];
-    const episodesMatch = html.match(/episodes\s*:\s*(\[.*?\])/s);
+    const episodesMatch = chunk.match(/episodes\s*:\s*(\[.*?\])/s);
 
     if (episodesMatch && episodesMatch[1]) {
       try {
@@ -273,9 +279,9 @@ async function getAnimeDetails(id) {
       }
     }
 
-    // --- Extraer Relaciones (Solo slug, type y startDate) ---
+    // --- Extraer Relaciones ---
     let formattedRelations = [];
-    const relationsMatch = html.match(/relations\s*:\s*\[(.*?)\](?=\}\}|,\s*[a-zA-Z0-9_]+\s*:)/s);
+    const relationsMatch = chunk.match(/relations\s*:\s*\[(.*?)\](?=\}\}|,\s*[a-zA-Z0-9_]+\s*:)/s);
 
     if (relationsMatch && relationsMatch[1]) {
       try {
@@ -292,7 +298,7 @@ async function getAnimeDetails(id) {
             formattedRelations.push({
               id: idMatch ? idMatch[1] : null,
               slug: slugMatch[1],
-              type: typeCode,      // Solo mandamos el número
+              type: typeCode,
               startDate: relDateMatch ? relDateMatch[1] : null
             });
           }
@@ -304,6 +310,7 @@ async function getAnimeDetails(id) {
 
     return {
       id: id,
+      internalId: internalId,
       title: title,
       cover: cover || null,
       banner: banner || null,

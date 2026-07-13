@@ -186,6 +186,7 @@ app.get('/api/anime', async (req, res) => {
       // AQUÍ SE AGREGAN STARTDATE, ENDDATE Y RELATIONS
       const combined = {
         id: id,
+        internalId: v1?.internalId || null,
         title: v1?.title || jk?.title || id,
         cover: jk?.cover || v1?.cover || '',
         banner: jk?.banner || v1?.banner || '', 
