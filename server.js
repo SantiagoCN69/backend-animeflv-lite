@@ -13,12 +13,14 @@ function normalizeTitleForCompare(title) {
   return title.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-// Función para deduplicar y FUSIONAR animes por Título
+// Función para deduplicar y FUSIONAR animes por ID
 function deduplicateAnimes(animes) {
   const seen = new Map();
   
   animes.forEach(anime => {
-    const key = normalizeTitleForCompare(anime.title) || anime.id;
+    // Usamos el ID como clave principal para deduplicación
+    // Ya que los títulos pueden variar entre fuentes (diferentes traducciones, formatos, etc.)
+    const key = anime.id || normalizeTitleForCompare(anime.title);
     if (seen.has(key)) {
       const existing = seen.get(key);
       if (anime.image) {
