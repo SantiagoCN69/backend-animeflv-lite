@@ -191,8 +191,7 @@ async function search(query) {
           title: title,
           cover: cover ? (cover.startsWith('http') ? cover : BASE_URL + cover) : null,
           url: link.startsWith('http') ? link : BASE_URL + link,
-          type: type,
-          source: 'jkanime'
+          type: type
         });
       }
     });
@@ -246,7 +245,6 @@ async function browse(params) {
         title: a.title,
         cover: a.image || null,
         synopsis: a.synopsis || "",
-        source: "jkanime",
         status: a.estado || "Desconocido"
       }))
     };
@@ -468,8 +466,7 @@ async function getAnimeDetails(id) {
       synopsis: synopsis || null,
       genres: genres,
       status: status,
-      episodes: sortedEpisodes, // Usamos la lista final ordenada y completa
-      source: 'jkanime'
+      episodes: sortedEpisodes
     };
   } catch (e) {
     console.log('No se pudo obtener detalles del anime:', e.message);

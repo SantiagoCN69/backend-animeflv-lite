@@ -177,7 +177,6 @@ app.get('/api/anime', async (req, res) => {
       }
 
       // 1. Unir datos básicos (priorizamos la fuente que los tenga)
-      // AQUÍ SE AGREGAN STARTDATE, ENDDATE Y RELATIONS
       const combined = {
         id: id,
         internalId: v1?.internalId || null,
@@ -189,8 +188,7 @@ app.get('/api/anime', async (req, res) => {
         status: v1?.status || jk?.status || 'Desconocido',
         startDate: v1?.startDate || jk?.startDate || null,
         endDate: v1?.endDate || jk?.endDate || null,
-        relations: v1?.relations || jk?.relations || [],
-        source: 'combined'
+        relations: v1?.relations || jk?.relations || []
       };
 
       // 2. Fusionar géneros sin duplicados

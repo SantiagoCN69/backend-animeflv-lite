@@ -168,8 +168,7 @@ async function browse(params) {
           title,
           type,
           url,
-          cover,
-          source: 'animeav1'
+          cover
         };
       }).filter(a => a.url !== null); // Limpiamos cualquier error de extracción
     }
@@ -316,8 +315,7 @@ async function getAnimeDetails(id) {
       status: status,
       startDate: startDate, 
       episodes: formattedEpisodes,
-      relations: formattedRelations, 
-      source: 'animeav1'
+      relations: formattedRelations
     };
 
   } catch (error) {
