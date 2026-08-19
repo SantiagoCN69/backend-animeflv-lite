@@ -263,12 +263,12 @@ app.get('/api/episode', async (req, res) => {
       
       // Procesar resultados de JKAnime (ahora los agregamos primero)
       if (jkanimeData.status === 'fulfilled' && jkanimeData.value && jkanimeData.value.servidores) {
-        results.push(...jkanimeData.value.servidores.map(s => ({ ...s, source: 'jkanime' })));
+        results.push(...jkanimeData.value.servidores);
       }
 
       // Procesar resultados de AnimeAV1 (ahora van después)
       if (animeav1Data.status === 'fulfilled' && animeav1Data.value && animeav1Data.value.servidores) {
-        results.push(...animeav1Data.value.servidores.map(s => ({ ...s, source: 'animeav1' })));
+        results.push(...animeav1Data.value.servidores);
       }
       
       // Unir servidores únicos por URL para evitar duplicados (más confiable que por nombre)
