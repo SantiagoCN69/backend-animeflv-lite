@@ -24,8 +24,21 @@ async function getLatestEpisodes() {
         });
 
         const $ = cheerio.load(response.data);
-
         const latest = [];
+
+        // Función auxiliar para extraer ID de URL
+        const getIdFromUrl = (url) => {
+            if (!url) return '';
+            const clean = url.replace(/\/+$/, '');
+            const parts = clean.split('/');
+            let last = parts[parts.length - 1];
+            if (/^\d+$/.test(last)) {
+                last = parts[parts.length - 2] || '';
+            } else {
+                last = last.replace(/-\d+$/, '');
+            }
+            return last;
+        };
 
         // SOLO la pestaña de Animes
         $("#animes .dir1").each((_, el) => {
@@ -47,11 +60,13 @@ async function getLatestEpisodes() {
 
             if (!title || !url || isNaN(chapter)) return;
 
+            const id = getIdFromUrl(url);
+
             latest.push({
+                id,
                 title,
-                chapter,
                 cover,
-                url
+                chapter
             });
         });
 
@@ -91,6 +106,20 @@ async function getEstrenos() {
 
     const latest = [];
 
+    // Función auxiliar para extraer ID de URL
+    const getIdFromUrl = (url) => {
+      if (!url) return '';
+      const clean = url.replace(/\/+$/, '');
+      const parts = clean.split('/');
+      let last = parts[parts.length - 1];
+      if (/^\d+$/.test(last)) {
+        last = parts[parts.length - 2] || '';
+      } else {
+        last = last.replace(/-\d+$/, '');
+      }
+      return last;
+    };
+
     $(".card").each((_, element) => {
       const card = $(element);
 
@@ -110,11 +139,12 @@ async function getEstrenos() {
         img.attr("src");
 
       if (title && href) {
+        const id = getIdFromUrl(href);
         latest.push({
+          id,
           title,
           chapter: isNaN(chapter) ? null : chapter,
-          cover,
-          url: href
+          cover
         });
       }
     });
@@ -147,7 +177,7 @@ async function search(query) {
     $('.anime__item').each((i, element) => {
       const $item = $(element);
       const title = $item.find('.anime__item__text h5 a').text().trim();
-      const image = $item.find('.anime__item__pic').attr('data-setbg');
+      const cover = $item.find('.anime__item__pic').attr('data-setbg');
       const link = $item.find('a').attr('href');
       const type = $item.find('.anime').text().trim();
       
@@ -159,7 +189,7 @@ async function search(query) {
         animes.push({
           id: id,
           title: title,
-          cover: image ? (image.startsWith('http') ? image : BASE_URL + image) : null,
+          cover: cover ? (cover.startsWith('http') ? cover : BASE_URL + cover) : null,
           url: link.startsWith('http') ? link : BASE_URL + link,
           type: type,
           source: 'jkanime'
@@ -214,10 +244,10 @@ async function browse(params) {
       PaginasTotales: data.total_pages || data.last_page || "161",
       animes: (data.data || []).map(a => ({
         title: a.title,
-        image: a.image || null,
+        cover: a.image || null,
         synopsis: a.synopsis || "",
         source: "jkanime",
-        estado: a.estado || ""
+        status: a.estado || "Desconocido"
       }))
     };
 
@@ -561,7 +591,7 @@ async function getSchedule() {
       $(element).find('.cajas .box.img').each((j, el) => {
         const title = $(el).attr('title') || $(el).find('h3').text().trim();
         const urlAnime = $(el).find('.boxx a').first().attr('href');
-        const image = $(el).find('.boxx img').attr('src');
+        const cover = $(el).find('.boxx img').attr('src');
         
         // Extraer datos adicionales (ID y Tipo) que están ocultos
         const dataDiv = $(el).find('.svea');
@@ -574,7 +604,7 @@ async function getSchedule() {
 
         animesList.push({
           title: title,
-          image: image || null,
+          cover: cover || null,
           type: type || null, // Ej: "Serie", "ONA"
           last_episode: lastEpisodeText.replace('Último capítulo: ', '').trim(),
           time_ago: timeAgo

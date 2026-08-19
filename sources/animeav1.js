@@ -20,51 +20,48 @@ function normalizeTitle(title) {
 
 async function getLatestEpisodes() {
   try {
-    // Reemplaza esto con tu lógica de fetch/axios hacia la URL principal de AnimeAV1
-    const response = await axios.get('https://animeav1.com', { 
+    const response = await axios.get(BASE_URL, { 
       headers: HEADERS,
       timeout: 15000
     });
     const $ = cheerio.load(response.data);
-    const episodes = [];
+    const latest = [];
+
+    // Función auxiliar para extraer ID de URL
+    const getIdFromUrl = (url) => {
+      if (!url) return '';
+      const parts = url.split('/');
+      if (parts.length >= 3) {
+        return parts[2];
+      }
+      return '';
+    };
 
     // Seleccionamos solo las tarjetas de la cuadrícula de últimos episodios
-    // Escapamos la barra inclinada en 'group/item' porque es un selector CSS válido
     $('article.group\\/item').each((index, element) => {
-      // Título: Está dentro del header > div
-      const title = $(element).find('header div').text().trim();
-      
-      // Episodio: Está dentro de un span con clase text-lead dentro del div bg-line
-      const episodeText = $(element).find('.bg-line span.text-lead').text().trim();
-      const episodeNumber = parseInt(episodeText, 10);
-      
-      // Imagen: Extraemos el src de la etiqueta img dentro del figure
-      const image = $(element).find('figure img').attr('src');
-      
-      // Link y ID: Extraemos el href del enlace invisible que cubre la tarjeta
-      const link = $(element).find('a.absolute.inset-0').attr('href');
-      let id = '';
-      
-      if (link) {
-        // El link tiene el formato: /media/nombre-del-anime/episodio
-        const parts = link.split('/');
-        if (parts.length >= 3) {
-          id = parts[2]; // Obtenemos 'nombre-del-anime'
-        }
-      }
+      const item = $(element);
 
-      if (title && id) {
-        episodes.push({
-          id: id,
-          title: title,
-          episode: episodeNumber,
-          image: image,
-          url: link
-        });
-      }
+      const title = item.find('header div').text().trim();
+      
+      const episodeText = item.find('.bg-line span.text-lead').text().trim();
+      const chapter = parseInt(episodeText, 10);
+      
+      const cover = item.find('figure img').attr('src');
+      
+      const link = item.find('a.absolute.inset-0').attr('href');
+      const id = getIdFromUrl(link);
+
+      if (!title || !id || isNaN(chapter)) return;
+
+      latest.push({
+        id,
+        title,
+        cover,
+        chapter
+      });
     });
 
-    return episodes;
+    return latest;
   } catch (error) {
     console.error('Error obteniendo últimos episodios de AnimeV1:', error.message);
     return [];
@@ -78,7 +75,7 @@ async function search(query) {
     // Usamos timeout para evitar que la conexión se quede abierta eternamente si el sitio tarda
     const response = await axios.get(searchUrl, { 
       headers: HEADERS,
-      timeout: 10000 
+      timeout: 15000 
     });
     
     const $ = cheerio.load(response.data);
@@ -90,17 +87,16 @@ async function search(query) {
       
       const title = article.find('h3').text().trim();
       const url = article.find('a').first().attr('href');
-      const image = article.find('figure img').attr('src');
+      const cover = article.find('figure img').attr('src');
       const type = article.find('.rounded.bg-line').text().trim();
 
       if (title && url) {
         animes.push({
           id: url.split('/').pop(),
           title: title,
-          image: image, // Mantenemos image según tu estructura
+          cover: cover,
           url: BASE_URL + url,
-          type: type || 'TV',
-          source: 'animeav1'
+          type: type || 'TV'
         });
       }
     });

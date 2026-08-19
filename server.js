@@ -13,44 +13,36 @@ function normalizeTitleForCompare(title) {
   return title.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-// Función para deduplicar y FUSIONAR animes por ID
+// Función optimizada para deduplicar y FUSIONAR animes por ID
 function deduplicateAnimes(animes) {
   const seen = new Map();
   
   animes.forEach(anime => {
     // Usamos el ID como clave principal para deduplicación
-    // Ya que los títulos pueden variar entre fuentes (diferentes traducciones, formatos, etc.)
     const key = anime.id || normalizeTitleForCompare(anime.title);
     if (seen.has(key)) {
       const existing = seen.get(key);
-      if (anime.image) {
-        existing.image = anime.image;
-      }
       
-      if (anime.cover) {
-        existing.cover = anime.cover;
-      }
-      
-      if (anime.id) {
-        existing.id = anime.id;
-      }
+      // Fusionar campos faltantes con prioridad a datos no nulos
+      if (anime.cover && !existing.cover) existing.cover = anime.cover;
+      if (anime.chapter && !existing.chapter) existing.chapter = anime.chapter;
+      if (anime.episode && !existing.episode) existing.episode = anime.episode;
+      if (anime.type && !existing.type) existing.type = anime.type;
+      if (anime.status && !existing.status) existing.status = anime.status;
+      if (anime.synopsis && !existing.synopsis) existing.synopsis = anime.synopsis;
+      if (anime.url && !existing.url) existing.url = anime.url;
+      if (anime.id && !existing.id) existing.id = anime.id;
 
+      // Fusionar servidores sin duplicados por URL (más confiable que por nombre)
       if (anime.servidores) {
         existing.servidores = existing.servidores || [];
         const allServers = [...existing.servidores, ...anime.servidores];
         existing.servidores = allServers.filter((server, index, self) =>
-          index === self.findIndex(s => s.name === server.name)
+          index === self.findIndex(s => s.url === server.url)
         );
       }
     } else {
-
       const newAnime = { ...anime };
-      
-      if (newAnime.chapter && !newAnime.episode) newAnime.episode = newAnime.chapter;
-      if (newAnime.episode && !newAnime.chapter) newAnime.chapter = newAnime.episode;
-      if (newAnime.cover && !newAnime.image) newAnime.image = newAnime.cover;
-      if (newAnime.image && !newAnime.cover) newAnime.cover = newAnime.image;
-
       seen.set(key, newAnime);
     }
   });
@@ -281,12 +273,12 @@ app.get('/api/episode', async (req, res) => {
         results.push(...animeav1Data.value.servidores.map(s => ({ ...s, source: 'animeav1' })));
       }
       
-      // Unir servidores únicos por nombre para evitar duplicados
+      // Unir servidores únicos por URL para evitar duplicados (más confiable que por nombre)
       const uniqueServers = [];
       const seen = new Map();
       
       results.forEach(server => {
-        const key = server.name || server.url;
+        const key = server.url;
         if (!seen.has(key)) {
           seen.set(key, true);
           uniqueServers.push(server);
