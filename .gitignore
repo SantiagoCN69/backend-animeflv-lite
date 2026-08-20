@@ -1,1 +1,30 @@
-/debug_animeflv.html
+# Archivos de prueba
+sources/prueba.html
+sources/prueba.js
+
+# Dependencias de Node
+node_modules/
+package-lock.json
+
+# Variables de entorno
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
