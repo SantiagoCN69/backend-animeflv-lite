@@ -56,7 +56,7 @@ async function getLatestEpisodes() {
       latest.push({
         id,
         title,
-        cover,
+        'cover-lasted': cover,
         chapter
       });
     });
