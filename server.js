@@ -24,12 +24,11 @@ function deduplicateAnimes(animes) {
       const existing = seen.get(key);
       
       // Fusionar campos faltantes con prioridad a datos no nulos
-      if (anime.cover && !existing.cover) {
-        existing.cover = anime.cover;
-      }
-      if (anime['cover-lasted'] && !existing.cover) {
-        // Solo usar cover-lasted si no existe cover de otra fuente
+      if (anime['cover-lasted']) {
+        // cover-lasted tiene prioridad absoluta sobre cover
         existing.cover = anime['cover-lasted'];
+      } else if (anime.cover && !existing.cover) {
+        existing.cover = anime.cover;
       }
       // Asegurarse de que cover-lasted no aparezca en el resultado final
       if (existing['cover-lasted']) {
