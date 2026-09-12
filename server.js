@@ -31,6 +31,10 @@ function deduplicateAnimes(animes) {
         // Solo usar cover-lasted si no existe cover de otra fuente
         existing.cover = anime['cover-lasted'];
       }
+      // Asegurarse de que cover-lasted no aparezca en el resultado final
+      if (existing['cover-lasted']) {
+        delete existing['cover-lasted'];
+      }
       if (anime.chapter && !existing.chapter) existing.chapter = anime.chapter;
       if (anime.episode && !existing.episode) existing.episode = anime.episode;
       if (anime.type && !existing.type) existing.type = anime.type;
@@ -49,6 +53,11 @@ function deduplicateAnimes(animes) {
       }
     } else {
       const newAnime = { ...anime };
+      // Si tiene cover-lasted, asignarlo a cover y eliminar cover-lasted
+      if (newAnime['cover-lasted']) {
+        newAnime.cover = newAnime['cover-lasted'];
+        delete newAnime['cover-lasted'];
+      }
       seen.set(key, newAnime);
     }
   });
