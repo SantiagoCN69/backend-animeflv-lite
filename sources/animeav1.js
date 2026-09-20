@@ -248,6 +248,9 @@ async function getAnimeDetails(id) {
     const categoryMatch = chunk.match(/category\s*:\s*\{[^}]*name\s*:\s*"([^"]+)"/);
     const category = categoryMatch ? categoryMatch[1] : 'Desconocido';
 
+    const scoreMatch = chunk.match(/score\s*:\s*(\d+(?:\.\d+)?)/);
+    const score = scoreMatch ? parseFloat(scoreMatch[1]) : null;
+
     const genres = [];
     const genresMatch = chunk.match(/genres\s*:\s*\[(.*?)\]/);
     if (genresMatch && genresMatch[1]) {
@@ -313,7 +316,8 @@ async function getAnimeDetails(id) {
       genres: genres,
       category: category,
       status: status,
-      startDate: startDate, 
+      startDate: startDate,
+      score: score,
       episodes: formattedEpisodes,
       relations: formattedRelations
     };

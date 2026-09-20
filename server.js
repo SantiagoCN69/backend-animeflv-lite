@@ -196,12 +196,13 @@ app.get('/api/anime', async (req, res) => {
         internalId: v1?.internalId || null,
         title: v1?.title || jk?.title || id,
         cover: jk?.cover || v1?.cover || '',
-        banner: jk?.banner || v1?.banner || '', 
+        banner: jk?.banner || v1?.banner || '',
         synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
         category: v1?.category || jk?.category || 'Desconocido',
         status: v1?.status || jk?.status || 'Desconocido',
         startDate: v1?.startDate || jk?.startDate || null,
         endDate: v1?.endDate || jk?.endDate || null,
+        score: v1?.score || null, // Solo de animeav1 por ahora
         relations: v1?.relations || jk?.relations || []
       };
 
