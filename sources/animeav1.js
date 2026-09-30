@@ -459,11 +459,9 @@ async function getSchedule() {
     const schedule = [];
 
     // Extraer los datos del script de SvelteKit
-    // Buscar el bloque de datos que contiene "media:"
     const scriptMatch = html.match(/data:\{media:\[([\s\S]*?)\]\}/);
     
     if (!scriptMatch) {
-      console.error("No se encontraron datos de media en el script");
       return [];
     }
 
@@ -472,15 +470,14 @@ async function getSchedule() {
     // Parsear cada item de media individualmente
     const mediaItems = [];
     
-    // Método más robusto: dividir por },{ y parsear cada item
+    // Dividir por },{ y parsear cada item
     const items = mediaDataStr.split('},{').map(item => {
-      // Añadir { al inicio y } al final si faltan
       if (!item.startsWith('{')) item = '{' + item;
       if (!item.endsWith('}')) item = item + '}';
       return item;
     });
     
-    items.forEach((item, index) => {
+    items.forEach(item => {
       try {
         const titleMatch = item.match(/title:"([^"]+)"/);
         const slugMatch = item.match(/slug:"([^"]+)"/);
@@ -491,17 +488,12 @@ async function getSchedule() {
         let latestEpisode = null;
         let latestEpisodeCreatedAt = null;
         
-        // Extraer latestEpisode si existe y no es void 0
         if (!item.includes('latestEpisode:void 0')) {
           const episodeMatch = item.match(/latestEpisode:\{[^}]*number:(\d+)/);
-          if (episodeMatch) {
-            latestEpisode = episodeMatch[1];
-          }
+          if (episodeMatch) latestEpisode = episodeMatch[1];
           
           const dateMatch = item.match(/latestEpisode:\{[^}]*createdAt:"([^"]+)"/);
-          if (dateMatch) {
-            latestEpisodeCreatedAt = dateMatch[1];
-          }
+          if (dateMatch) latestEpisodeCreatedAt = dateMatch[1];
         }
         
         if (titleMatch && slugMatch) {
@@ -511,16 +503,14 @@ async function getSchedule() {
             startDate: startDateMatch ? startDateMatch[1] : null,
             createdAt: createdAtMatch ? createdAtMatch[1] : null,
             category: categoryMatch ? categoryMatch[1] : 'Desconocido',
-            latestEpisode: latestEpisode,
-            latestEpisodeCreatedAt: latestEpisodeCreatedAt
+            latestEpisode,
+            latestEpisodeCreatedAt
           });
         }
       } catch (e) {
-        console.error(`Error parsing item ${index}:`, e.message);
+        // Ignorar errores de parsing
       }
     });
-    
-    console.log("Total mediaItems parsed:", mediaItems.length);
 
     // Organizar por días de la semana basándose en la fecha de inicio
     const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
