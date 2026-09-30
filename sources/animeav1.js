@@ -468,66 +468,23 @@ async function getSchedule() {
     }
 
     const mediaDataStr = scriptMatch[1];
-    console.log("mediaDataStr length:", mediaDataStr.length);
-    console.log("mediaDataStr sample:", mediaDataStr.substring(0, 500));
     
     // Parsear cada item de media individualmente
     const mediaItems = [];
     
-    // Usar regex para encontrar todos los items completos que comienzan con {id:\d+ y terminan con }}
-    const itemPattern = /\{id:\d+,title:"[^"]+",synopsis:"[^"]*",poster:[^,]*,slug:"[^"]+",startDate:"[^"]+",createdAt:"[^"]+",category:\{id:\d+,name:"[^"]+"\},latestEpisode:\{[^}]+\}\}?/g;
+    // Usar regex más simple para encontrar items básicos
+    const itemPattern = /\{id:\d+,title:"([^"]+)",synopsis:"[^"]*",poster:[^,]*,slug:"([^"]+)",startDate:"([^"]+)",createdAt:"([^"]+)",category:\{id:\d+,name:"([^"]+)"\}/g;
     
-    const items = mediaDataStr.match(itemPattern) || [];
-    console.log("Items found with regex:", items.length);
-    
-    items.forEach((item, index) => {
-      try {
-        const idMatch = item.match(/^\{id:(\d+)/);
-        const titleMatch = item.match(/title:"([^"]+)"/);
-        const slugMatch = item.match(/slug:"([^"]+)"/);
-        const startDateMatch = item.match(/startDate:"([^"]+)"/);
-        const createdAtMatch = item.match(/createdAt:"([^"]+)"/);
-        
-        console.log(`Item ${index}: title=${titleMatch?.[1]}, slug=${slugMatch?.[1]}`);
-        
-        // Extraer category
-        let category = 'Desconocido';
-        const categoryMatch = item.match(/category:\{id:\d+,name:"([^"]+)"\}/);
-        if (categoryMatch) {
-          category = categoryMatch[1];
-          console.log(`Item ${index}: category=${category}`);
-        }
-        
-        // Extraer latestEpisode
-        let latestEpisode = null;
-        let latestEpisodeCreatedAt = null;
-        
-        const episodeMatch = item.match(/latestEpisode:\{[^}]*number:(\d+)[^}]*createdAt:"([^"]+)"[^}]*\}/);
-        if (episodeMatch) {
-          latestEpisode = episodeMatch[1];
-          latestEpisodeCreatedAt = episodeMatch[2];
-          console.log(`Item ${index}: latestEpisode=${latestEpisode}, createdAt=${latestEpisodeCreatedAt}`);
-        } else {
-          console.log(`Item ${index}: No latestEpisode found, item snippet:`, item.substring(0, 200));
-        }
-        
-        if (titleMatch && slugMatch) {
-          mediaItems.push({
-            title: titleMatch[1],
-            slug: slugMatch[1],
-            startDate: startDateMatch ? startDateMatch[1] : null,
-            createdAt: createdAtMatch ? createdAtMatch[1] : null,
-            category: category,
-            latestEpisode: latestEpisode,
-            latestEpisodeCreatedAt: latestEpisodeCreatedAt
-          });
-        }
-      } catch (e) {
-        console.error(`Error parsing item ${index}:`, e.message);
-      }
-    });
-    
-    console.log("Total mediaItems parsed:", mediaItems.length);
+    let match;
+    while ((match = itemPattern.exec(mediaDataStr)) !== null) {
+      mediaItems.push({
+        title: match[1],
+        slug: match[2],
+        startDate: match[3],
+        createdAt: match[4],
+        category: match[5]
+      });
+    }
 
     // Organizar por días de la semana basándose en la fecha de inicio
     const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -539,16 +496,19 @@ async function getSchedule() {
     mediaItems.forEach(anime => {
       if (anime.startDate) {
         const date = new Date(anime.startDate);
-        const dayName = daysOfWeek[date.getDay()];
+        const dayIndex = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+        const dayName = daysOfWeek[dayIndex];
+        
+        console.log(`Anime: ${anime.title}, startDate: ${anime.startDate}, dayIndex: ${dayIndex}, dayName: ${dayName}`);
         
         const cover = anime.slug ? `https://cdn.animeav1.com/covers/${anime.slug}.jpg` : null;
-        const timeAgo = getTimeAgo(anime.latestEpisodeCreatedAt);
+        const timeAgo = getTimeAgo(anime.createdAt);
         
         dayGroups[dayName].push({
           title: anime.title,
           cover: cover,
           type: anime.category,
-          last_episode: anime.latestEpisode ? `Capítulo ${anime.latestEpisode}` : null,
+          last_episode: null, // Por ahora no disponible
           time_ago: timeAgo,
           url: anime.slug ? `${BASE_URL}/media/${anime.slug}` : null
         });
