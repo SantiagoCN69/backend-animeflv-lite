@@ -70,6 +70,31 @@ function normalizeTitle(title) {
     .trim();
 }
 
+// Calcular tiempo relativo (timeAgo) desde una fecha
+function getTimeAgo(dateString) {
+  if (!dateString) return null;
+  
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSecs < 60) return 'hace un momento';
+    if (diffMins < 60) return `hace ${diffMins} minuto${diffMins !== 1 ? 's' : ''}`;
+    if (diffHours < 24) return `hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
+    if (diffDays < 7) return `hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
+    if (diffDays < 30) return `hace ${Math.floor(diffDays / 7)} semana${Math.floor(diffDays / 7) !== 1 ? 's' : ''}`;
+    if (diffDays < 365) return `hace ${Math.floor(diffDays / 30)} mes${Math.floor(diffDays / 30) !== 1 ? 'es' : ''}`;
+    return `hace ${Math.floor(diffDays / 365)} año${Math.floor(diffDays / 365) !== 1 ? 's' : ''}`;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function getLatestEpisodes() {
   try {
     const response = await fetchWithCache(BASE_URL);
@@ -425,6 +450,129 @@ async function getEpisodeLinks(url) {
   }
 }
 
+async function getSchedule() {
+  try {
+    const url = `${BASE_URL}/horario`;
+    const response = await fetchWithCache(url);
+    const html = response.data;
+    const $ = cheerio.load(html);
+    const schedule = [];
+
+    // Extraer los datos del script de SvelteKit
+    // Buscar el bloque de datos que contiene "media:"
+    const scriptMatch = html.match(/data:\{media:\[([\s\S]*?)\]\}/);
+    
+    if (!scriptMatch) {
+      console.error("No se encontraron datos de media en el script");
+      return [];
+    }
+
+    const mediaDataStr = scriptMatch[1];
+    console.log("mediaDataStr length:", mediaDataStr.length);
+    console.log("mediaDataStr sample:", mediaDataStr.substring(0, 500));
+    
+    // Parsear cada item de media individualmente
+    const mediaItems = [];
+    
+    // Usar regex para encontrar todos los items completos que comienzan con {id:\d+ y terminan con }}
+    const itemPattern = /\{id:\d+,title:"[^"]+",synopsis:"[^"]*",poster:[^,]*,slug:"[^"]+",startDate:"[^"]+",createdAt:"[^"]+",category:\{id:\d+,name:"[^"]+"\},latestEpisode:\{[^}]+\}\}?/g;
+    
+    const items = mediaDataStr.match(itemPattern) || [];
+    console.log("Items found with regex:", items.length);
+    
+    items.forEach((item, index) => {
+      try {
+        const idMatch = item.match(/^\{id:(\d+)/);
+        const titleMatch = item.match(/title:"([^"]+)"/);
+        const slugMatch = item.match(/slug:"([^"]+)"/);
+        const startDateMatch = item.match(/startDate:"([^"]+)"/);
+        const createdAtMatch = item.match(/createdAt:"([^"]+)"/);
+        
+        console.log(`Item ${index}: title=${titleMatch?.[1]}, slug=${slugMatch?.[1]}`);
+        
+        // Extraer category
+        let category = 'Desconocido';
+        const categoryMatch = item.match(/category:\{id:\d+,name:"([^"]+)"\}/);
+        if (categoryMatch) {
+          category = categoryMatch[1];
+          console.log(`Item ${index}: category=${category}`);
+        }
+        
+        // Extraer latestEpisode
+        let latestEpisode = null;
+        let latestEpisodeCreatedAt = null;
+        
+        const episodeMatch = item.match(/latestEpisode:\{[^}]*number:(\d+)[^}]*createdAt:"([^"]+)"[^}]*\}/);
+        if (episodeMatch) {
+          latestEpisode = episodeMatch[1];
+          latestEpisodeCreatedAt = episodeMatch[2];
+          console.log(`Item ${index}: latestEpisode=${latestEpisode}, createdAt=${latestEpisodeCreatedAt}`);
+        } else {
+          console.log(`Item ${index}: No latestEpisode found, item snippet:`, item.substring(0, 200));
+        }
+        
+        if (titleMatch && slugMatch) {
+          mediaItems.push({
+            title: titleMatch[1],
+            slug: slugMatch[1],
+            startDate: startDateMatch ? startDateMatch[1] : null,
+            createdAt: createdAtMatch ? createdAtMatch[1] : null,
+            category: category,
+            latestEpisode: latestEpisode,
+            latestEpisodeCreatedAt: latestEpisodeCreatedAt
+          });
+        }
+      } catch (e) {
+        console.error(`Error parsing item ${index}:`, e.message);
+      }
+    });
+    
+    console.log("Total mediaItems parsed:", mediaItems.length);
+
+    // Organizar por días de la semana basándose en la fecha de inicio
+    const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    
+    // Agrupar animes por día de emisión (basado en startDate)
+    const dayGroups = {};
+    daysOfWeek.forEach(day => dayGroups[day] = []);
+    
+    mediaItems.forEach(anime => {
+      if (anime.startDate) {
+        const date = new Date(anime.startDate);
+        const dayName = daysOfWeek[date.getDay()];
+        
+        const cover = anime.slug ? `https://cdn.animeav1.com/covers/${anime.slug}.jpg` : null;
+        const timeAgo = getTimeAgo(anime.latestEpisodeCreatedAt);
+        
+        dayGroups[dayName].push({
+          title: anime.title,
+          cover: cover,
+          type: anime.category,
+          last_episode: anime.latestEpisode ? `Capítulo ${anime.latestEpisode}` : null,
+          time_ago: timeAgo,
+          url: anime.slug ? `${BASE_URL}/media/${anime.slug}` : null
+        });
+      }
+    });
+
+    // Convertir a formato de array
+    daysOfWeek.forEach(dayName => {
+      if (dayGroups[dayName].length > 0) {
+        schedule.push({
+          day: dayName,
+          animes: dayGroups[dayName]
+        });
+      }
+    });
+
+    return schedule;
+
+  } catch (error) {
+    console.error("Error en getSchedule AnimeAV1:", error.message);
+    return [];
+  }
+}
+
 module.exports = {
   getLatestEpisodes,
   search,
@@ -432,5 +580,6 @@ module.exports = {
   getAnimeDetails,
   getEpisodeLinks,
   normalizeTitle,
-  BASE_URL
+  BASE_URL,
+  getSchedule
 };

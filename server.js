@@ -346,8 +346,61 @@ app.get('/api/example/servers', async (req, res) => {
 
 // obtener los animes por horarios
 app.get('/api/schedule', async (req, res) => {
+  const source = req.query.source || 'all';
   try {
-    const data = await jkanime.getSchedule();
+    let data;
+
+    if (source === 'animeav1') {
+      data = await animeav1.getSchedule();
+    } else if (source === 'jkanime') {
+      data = await jkanime.getSchedule();
+    } else {
+      // Combinar horarios de ambas fuentes
+      const [jkanimeData, animeav1Data] = await Promise.allSettled([
+        jkanime.getSchedule(),
+        animeav1.getSchedule()
+      ]);
+
+      const results = [];
+
+      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
+        const jkData = Array.isArray(jkanimeData.value) ? jkanimeData.value : [];
+        results.push(jkData);
+      }
+
+      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
+        const av1Data = Array.isArray(animeav1Data.value) ? animeav1Data.value : [];
+        results.push(av1Data);
+      }
+
+      // Combinar por día de la semana
+      const daysOfWeek = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+      const combinedSchedule = [];
+
+      daysOfWeek.forEach(dayName => {
+        const dayAnimes = [];
+        
+        // Buscar animes de este día en ambas fuentes
+        results.forEach(sourceSchedule => {
+          if (Array.isArray(sourceSchedule)) {
+            const dayData = sourceSchedule.find(d => d.day === dayName);
+            if (dayData && dayData.animes && Array.isArray(dayData.animes)) {
+              dayAnimes.push(...dayData.animes);
+            }
+          }
+        });
+
+        if (dayAnimes.length > 0) {
+          combinedSchedule.push({
+            day: dayName,
+            animes: dayAnimes
+          });
+        }
+      });
+
+      data = combinedSchedule;
+    }
+
     res.json(data);
   } catch (error) {
     console.error('Error en /api/schedule:', error);
