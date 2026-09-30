@@ -472,19 +472,55 @@ async function getSchedule() {
     // Parsear cada item de media individualmente
     const mediaItems = [];
     
-    // Usar regex más simple para encontrar items básicos
-    const itemPattern = /\{id:\d+,title:"([^"]+)",synopsis:"[^"]*",poster:[^,]*,slug:"([^"]+)",startDate:"([^"]+)",createdAt:"([^"]+)",category:\{id:\d+,name:"([^"]+)"\}/g;
+    // Método más robusto: dividir por },{ y parsear cada item
+    const items = mediaDataStr.split('},{').map(item => {
+      // Añadir { al inicio y } al final si faltan
+      if (!item.startsWith('{')) item = '{' + item;
+      if (!item.endsWith('}')) item = item + '}';
+      return item;
+    });
     
-    let match;
-    while ((match = itemPattern.exec(mediaDataStr)) !== null) {
-      mediaItems.push({
-        title: match[1],
-        slug: match[2],
-        startDate: match[3],
-        createdAt: match[4],
-        category: match[5]
-      });
-    }
+    items.forEach((item, index) => {
+      try {
+        const titleMatch = item.match(/title:"([^"]+)"/);
+        const slugMatch = item.match(/slug:"([^"]+)"/);
+        const startDateMatch = item.match(/startDate:"([^"]+)"/);
+        const createdAtMatch = item.match(/createdAt:"([^"]+)"/);
+        const categoryMatch = item.match(/category:\{id:\d+,name:"([^"]+)"\}/);
+        
+        let latestEpisode = null;
+        let latestEpisodeCreatedAt = null;
+        
+        // Extraer latestEpisode si existe y no es void 0
+        if (!item.includes('latestEpisode:void 0')) {
+          const episodeMatch = item.match(/latestEpisode:\{[^}]*number:(\d+)/);
+          if (episodeMatch) {
+            latestEpisode = episodeMatch[1];
+          }
+          
+          const dateMatch = item.match(/latestEpisode:\{[^}]*createdAt:"([^"]+)"/);
+          if (dateMatch) {
+            latestEpisodeCreatedAt = dateMatch[1];
+          }
+        }
+        
+        if (titleMatch && slugMatch) {
+          mediaItems.push({
+            title: titleMatch[1],
+            slug: slugMatch[1],
+            startDate: startDateMatch ? startDateMatch[1] : null,
+            createdAt: createdAtMatch ? createdAtMatch[1] : null,
+            category: categoryMatch ? categoryMatch[1] : 'Desconocido',
+            latestEpisode: latestEpisode,
+            latestEpisodeCreatedAt: latestEpisodeCreatedAt
+          });
+        }
+      } catch (e) {
+        console.error(`Error parsing item ${index}:`, e.message);
+      }
+    });
+    
+    console.log("Total mediaItems parsed:", mediaItems.length);
 
     // Organizar por días de la semana basándose en la fecha de inicio
     const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -494,35 +530,34 @@ async function getSchedule() {
     daysOfWeek.forEach(day => dayGroups[day] = []);
     
     mediaItems.forEach(anime => {
-      if (anime.startDate) {
-        const date = new Date(anime.startDate);
+      // Usar latestEpisodeCreatedAt para determinar el día, fallback a startDate
+      const dateToUse = anime.latestEpisodeCreatedAt || anime.startDate;
+      
+      if (dateToUse) {
+        const date = new Date(dateToUse);
         const dayIndex = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
         const dayName = daysOfWeek[dayIndex];
         
-        console.log(`Anime: ${anime.title}, startDate: ${anime.startDate}, dayIndex: ${dayIndex}, dayName: ${dayName}`);
-        
         const cover = anime.slug ? `https://cdn.animeav1.com/covers/${anime.slug}.jpg` : null;
-        const timeAgo = getTimeAgo(anime.createdAt);
+        const timeAgo = getTimeAgo(anime.latestEpisodeCreatedAt || anime.createdAt);
         
         dayGroups[dayName].push({
           title: anime.title,
           cover: cover,
           type: anime.category,
-          last_episode: null, // Por ahora no disponible
+          last_episode: anime.latestEpisode ? `Capítulo ${anime.latestEpisode}` : null,
           time_ago: timeAgo,
           url: anime.slug ? `${BASE_URL}/media/${anime.slug}` : null
         });
       }
     });
 
-    // Convertir a formato de array
+    // Convertir a formato de array (incluyendo días vacíos)
     daysOfWeek.forEach(dayName => {
-      if (dayGroups[dayName].length > 0) {
-        schedule.push({
-          day: dayName,
-          animes: dayGroups[dayName]
-        });
-      }
+      schedule.push({
+        day: dayName,
+        animes: dayGroups[dayName]
+      });
     });
 
     return schedule;
