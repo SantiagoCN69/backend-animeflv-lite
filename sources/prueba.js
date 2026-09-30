@@ -1,7 +1,7 @@
 import { get } from "https";
 import { writeFileSync } from "fs";
 
-const url = "https://animeav1.com/media/kabushikigaisha-magi-lumiere-2nd-season";
+const url = "https://animeav1.com/horario";
 
 get(url, (res) => {
   let html = "";
