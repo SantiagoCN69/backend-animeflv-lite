@@ -3,19 +3,64 @@ const axios = require('axios');
 
 const BASE_URL = 'https://animeav1.com';
 
-// Encabezados estándar para evitar bloqueos básicos
+// Cache simple en memoria para reducir peticiones repetidas
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function getCacheKey(url) {
+  return url;
+}
+
+function getCached(url) {
+  const key = getCacheKey(url);
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCache(url, data) {
+  cache.set(getCacheKey(url), { data, timestamp: Date.now() });
+}
+
+// Headers optimizados
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
   'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Connection': 'keep-alive',
-  'Upgrade-Insecure-Requests': '1',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Cache-Control': 'max-age=0'
+  'Connection': 'keep-alive'
 };
+
+// Configuración axios optimizada
+const axiosConfig = {
+  headers: HEADERS,
+  timeout: 20000,
+  maxRedirects: 3,
+  validateStatus: function (status) {
+    return status >= 200 && status < 500;
+  }
+};
+
+// Función helper optimizada con cache
+async function fetchWithCache(url) {
+  const cached = getCached(url);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await axios.get(url, axiosConfig);
+    if (response.status === 200 && response.data) {
+      setCache(url, response);
+      return response;
+    }
+    throw new Error(`Status ${response.status}`);
+  } catch (error) {
+    console.error(`Error fetching ${url}:`, error.message);
+    throw error;
+  }
+}
 
 // Normalizar título para comparación
 function normalizeTitle(title) {
@@ -27,11 +72,7 @@ function normalizeTitle(title) {
 
 async function getLatestEpisodes() {
   try {
-    const response = await axios.get(BASE_URL, {
-      headers: HEADERS,
-      timeout: 30000,
-      maxRedirects: 5
-    });
+    const response = await fetchWithCache(BASE_URL);
     const $ = cheerio.load(response.data);
     const latest = [];
 
@@ -80,11 +121,7 @@ async function search(query) {
   try {
     const searchUrl = `${BASE_URL}/catalogo?search=${encodeURIComponent(query)}`;
 
-    const response = await axios.get(searchUrl, {
-      headers: HEADERS,
-      timeout: 30000,
-      maxRedirects: 5
-    });
+    const response = await fetchWithCache(searchUrl);
     
     const $ = cheerio.load(response.data);
     const animes = [];
@@ -123,11 +160,7 @@ async function browse(params) {
   const fullUrl = `${BASE_URL}/catalogo?${params}`;
 
   try {
-    const response = await axios.get(fullUrl, {
-      headers: HEADERS,
-      timeout: 30000,
-      maxRedirects: 5
-    });
+    const response = await fetchWithCache(fullUrl);
     const html = response.data;
 
     // 1. Extraer el Total de Páginas (Fallback a "1" si no se encuentra)
@@ -139,8 +172,8 @@ async function browse(params) {
 
     let animes = [];
 
-    // 2. Extraer el bloque del array 'results'
-    const resultsMatch = html.match(/results\s*:\s*\[(.*?)\]\s*,\s*total\s*:/);
+    // 2. Extraer el bloque del array 'results' (usando [\s\S] para capturar con newlines)
+    const resultsMatch = html.match(/results\s*:\s*\[([\s\S]*?)\]\s*,\s*total/);
     
     if (resultsMatch && resultsMatch[1]) {
       const resultsStr = resultsMatch[1];
@@ -150,10 +183,16 @@ async function browse(params) {
 
       animes = items.map(item => {
         // Como cortamos por '{id:', lo primero que queda es el id (ej: '"3812"')
-        const idMatch = item.match(/^"([^"]+)"/); 
+        const idMatch = item.match(/^"([^"]+)"/);
         const titleMatch = item.match(/title\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
         const slugMatch = item.match(/slug\s*:\s*"([^"]+)"/);
         const catMatch = item.match(/categoryId\s*:\s*(\d+)/);
+        // Buscar synopsis - puede contener newlines y caracteres especiales
+        let synopsis = '';
+        const synopsisMatch = item.match(/synopsis\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (synopsisMatch) {
+          synopsis = synopsisMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+        }
 
         const id = idMatch ? idMatch[1] : '';
         const title = titleMatch ? titleMatch[1].replace(/\\"/g, '"') : 'Sin título';
@@ -169,7 +208,7 @@ async function browse(params) {
 
         // Construir URLs
         const url = slug ? `${BASE_URL}/media/${slug}` : null;
-        
+
         // El CDN de AnimeAV1 suele guardar las portadas usando el ID de la base de datos
         const cover = id ? `https://cdn.animeav1.com/covers/${id}.jpg` : null;
 
@@ -177,7 +216,8 @@ async function browse(params) {
           title,
           type,
           url,
-          cover
+          cover,
+          synopsis
         };
       }).filter(a => a.url !== null); // Limpiamos cualquier error de extracción
     }
@@ -194,11 +234,7 @@ async function browse(params) {
 async function getAnimeDetails(id) {
   try {
     const animePageUrl = `${BASE_URL}/media/${id}`;
-    const response = await axios.get(animePageUrl, {
-      headers: HEADERS,
-      timeout: 30000,
-      maxRedirects: 5
-    });
+    const response = await fetchWithCache(animePageUrl);
     const html = response.data;
 
     // --- 1. Aislar el bloque exacto de "media" ---
@@ -340,11 +376,7 @@ async function getAnimeDetails(id) {
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
-    const resp = await axios.get(url, {
-      headers: HEADERS,
-      timeout: 30000,
-      maxRedirects: 5
-    });
+    const resp = await fetchWithCache(url);
     const html = resp.data;
 
     // Buscar el bloque de 'embeds' dentro del script de SvelteKit

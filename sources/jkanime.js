@@ -3,68 +3,63 @@ const axios = require('axios');
 
 const BASE_URL = 'https://jkanime.net';
 
-// Proxy alternativo para evitar bloqueos en servicios de hosting
-const PROXY_ALTERNATIVES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-  null // Sin proxy (directo)
-];
+// Cache simple en memoria para reducir peticiones repetidas
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
-// Múltiples conjuntos de headers para intentar si uno falla
-const HEADERS_VARIANTS = [
-  {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Cache-Control': 'max-age=0'
-  },
-  {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Connection': 'keep-alive'
-  },
-  {
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9'
+function getCacheKey(url) {
+  return url;
+}
+
+function getCached(url) {
+  const key = getCacheKey(url);
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
   }
-];
+  return null;
+}
 
-// Función helper para hacer peticiones con múltiples headers fallback y proxies
-async function fetchWithFallback(url, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    const headers = HEADERS_VARIANTS[i % HEADERS_VARIANTS.length];
-    const proxy = PROXY_ALTERNATIVES[i % PROXY_ALTERNATIVES.length];
-    const targetUrl = proxy ? proxy + encodeURIComponent(url) : url;
+function setCache(url, data) {
+  cache.set(getCacheKey(url), { data, timestamp: Date.now() });
+}
 
-    try {
-      const response = await axios.get(targetUrl, {
-        headers: proxy ? {} : headers, // Sin headers personalizados cuando usamos proxy
-        timeout: 30000,
-        maxRedirects: 5,
-        validateStatus: function (status) {
-          return status >= 200 && status < 500;
-        }
-      });
+// Headers optimizados
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  'Connection': 'keep-alive'
+};
 
-      if (response.status === 200 && response.data) {
-        return response;
-      }
+// Configuración axios optimizada
+const axiosConfig = {
+  headers: HEADERS,
+  timeout: 20000,
+  maxRedirects: 3,
+  validateStatus: function (status) {
+    return status >= 200 && status < 500;
+  }
+};
 
-      console.log(`Intento ${i + 1} (proxy: ${proxy ? 'Sí' : 'No'}): Status ${response.status} para ${url}`);
-    } catch (error) {
-      console.log(`Intento ${i + 1} falló para ${url}:`, error.message);
-      if (i === retries - 1) throw error;
+// Función helper optimizada con cache
+async function fetchWithCache(url) {
+  const cached = getCached(url);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await axios.get(url, axiosConfig);
+    if (response.status === 200 && response.data) {
+      setCache(url, response);
+      return response;
     }
+    throw new Error(`Status ${response.status}`);
+  } catch (error) {
+    console.error(`Error fetching ${url}:`, error.message);
+    throw error;
   }
-  throw new Error('Todos los intentos de conexión fallaron');
 }
 
 // Normalizar título para comparación (eliminar espacios, acentos, etc.)
@@ -78,7 +73,7 @@ function normalizeTitle(title) {
 // Últimos capítulos
 async function getLatestEpisodes() {
     try {
-        const response = await fetchWithFallback(BASE_URL, 5);
+        const response = await fetchWithCache(BASE_URL);
 
         const $ = cheerio.load(response.data);
         const latest = [];
@@ -138,7 +133,7 @@ async function getLatestEpisodes() {
 // Estrenos de temporada
 async function getEstrenos() {
   try {
-    const response = await fetchWithFallback(`${BASE_URL}/estrenos/`, 5);
+    const response = await fetchWithCache(`${BASE_URL}/estrenos/`);
 
     const $ = cheerio.load(response.data);
 
@@ -210,7 +205,7 @@ async function getEstrenos() {
 // Buscar anime
 async function search(query) {
   try {
-    const response = await fetchWithFallback(`${BASE_URL}/buscar/${query}`, 5);
+    const response = await fetchWithCache(`${BASE_URL}/buscar/${query}`);
 
     const $ = cheerio.load(response.data);
     const animes = [];
@@ -250,7 +245,7 @@ async function browse(params) {
   try {
     const url = `${BASE_URL}/directorio/?${params}`;
 
-    const response = await fetchWithFallback(url, 5);
+    const response = await fetchWithCache(url);
 
     const html = response.data;
 
@@ -298,7 +293,7 @@ async function browse(params) {
 // Detalles de anime
 async function getAnimeDetails(id) {
   try {
-    const response = await fetchWithFallback(`${BASE_URL}/${id}`, 5);
+    const response = await fetchWithCache(`${BASE_URL}/${id}`);
 
     const $ = cheerio.load(response.data);
     
@@ -406,7 +401,7 @@ async function getAnimeDetails(id) {
       if (internalId) {
         try {
           // Petición al paginador interno
-          const ajaxRes = await fetchWithFallback(`${BASE_URL}/ajax/pagination_episodes/${internalId}/1/`, 3);
+          const ajaxRes = await fetchWithCache(`${BASE_URL}/ajax/pagination_episodes/${internalId}/1/`);
           
           if (ajaxRes.data && Array.isArray(ajaxRes.data)) {
             ajaxRes.data.forEach(ep => {
@@ -507,7 +502,7 @@ async function getAnimeDetails(id) {
 async function getEpisodeLinks(url) {
   try {
 
-    const response = await fetchWithFallback(url, 5);
+    const response = await fetchWithCache(url);
 
     const $ = cheerio.load(response.data);
 
@@ -589,7 +584,7 @@ async function getSchedule() {
     // URL del horario de JKAnime
     const url = `${BASE_URL}/horario/`;
 
-    const response = await fetchWithFallback(url, 5);
+    const response = await fetchWithCache(url);
 
     const html = response.data;
     const $ = cheerio.load(html);
