@@ -479,6 +479,7 @@ async function getSchedule() {
     
     items.forEach(item => {
       try {
+        const idMatch = item.match(/^\{id:(\d+)/);
         const titleMatch = item.match(/title:"([^"]+)"/);
         const slugMatch = item.match(/slug:"([^"]+)"/);
         const startDateMatch = item.match(/startDate:"([^"]+)"/);
@@ -498,6 +499,7 @@ async function getSchedule() {
         
         if (titleMatch && slugMatch) {
           mediaItems.push({
+            id: idMatch ? idMatch[1] : null,
             title: titleMatch[1],
             slug: slugMatch[1],
             startDate: startDateMatch ? startDateMatch[1] : null,
@@ -520,6 +522,9 @@ async function getSchedule() {
     daysOfWeek.forEach(day => dayGroups[day] = []);
     
     mediaItems.forEach(anime => {
+      // Solo incluir animes que tengan latestEpisode
+      if (!anime.latestEpisode) return;
+      
       // Usar latestEpisodeCreatedAt para determinar el día, fallback a startDate
       const dateToUse = anime.latestEpisodeCreatedAt || anime.startDate;
       
@@ -528,14 +533,14 @@ async function getSchedule() {
         const dayIndex = date.getDay(); // 0 = Domingo, 1 = Lunes, etc.
         const dayName = daysOfWeek[dayIndex];
         
-        const cover = anime.slug ? `https://cdn.animeav1.com/covers/${anime.slug}.jpg` : null;
+        const cover = anime.id ? `https://cdn.animeav1.com/covers/${anime.id}.jpg` : null;
         const timeAgo = getTimeAgo(anime.latestEpisodeCreatedAt || anime.createdAt);
         
         dayGroups[dayName].push({
           title: anime.title,
           cover: cover,
           type: anime.category,
-          last_episode: anime.latestEpisode ? `Capítulo ${anime.latestEpisode}` : null,
+          last_episode: `Capítulo ${anime.latestEpisode}`,
           time_ago: timeAgo,
           url: anime.slug ? `${BASE_URL}/media/${anime.slug}` : null
         });
