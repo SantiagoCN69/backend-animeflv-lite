@@ -540,7 +540,7 @@ async function getSchedule() {
           title: anime.title,
           cover: cover,
           type: anime.category,
-          last_episode: `Capítulo ${anime.latestEpisode}`,
+          last_episode: anime.latestEpisode,
           time_ago: timeAgo,
           url: anime.slug ? `${BASE_URL}/media/${anime.slug}` : null
         });
