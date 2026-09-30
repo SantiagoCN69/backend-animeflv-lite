@@ -5,9 +5,16 @@ const BASE_URL = 'https://animeav1.com';
 
 // Encabezados estándar para evitar bloqueos básicos
 const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Cache-Control': 'max-age=0'
 };
 
 // Normalizar título para comparación
@@ -20,9 +27,10 @@ function normalizeTitle(title) {
 
 async function getLatestEpisodes() {
   try {
-    const response = await axios.get(BASE_URL, { 
+    const response = await axios.get(BASE_URL, {
       headers: HEADERS,
-      timeout: 15000
+      timeout: 30000,
+      maxRedirects: 5
     });
     const $ = cheerio.load(response.data);
     const latest = [];
@@ -71,11 +79,11 @@ async function getLatestEpisodes() {
 async function search(query) {
   try {
     const searchUrl = `${BASE_URL}/catalogo?search=${encodeURIComponent(query)}`;
-    
-    // Usamos timeout para evitar que la conexión se quede abierta eternamente si el sitio tarda
-    const response = await axios.get(searchUrl, { 
+
+    const response = await axios.get(searchUrl, {
       headers: HEADERS,
-      timeout: 15000 
+      timeout: 30000,
+      maxRedirects: 5
     });
     
     const $ = cheerio.load(response.data);
@@ -115,9 +123,10 @@ async function browse(params) {
   const fullUrl = `${BASE_URL}/catalogo?${params}`;
 
   try {
-    const response = await axios.get(fullUrl, { 
+    const response = await axios.get(fullUrl, {
       headers: HEADERS,
-      timeout: 15000
+      timeout: 30000,
+      maxRedirects: 5
     });
     const html = response.data;
 
@@ -185,9 +194,10 @@ async function browse(params) {
 async function getAnimeDetails(id) {
   try {
     const animePageUrl = `${BASE_URL}/media/${id}`;
-    const response = await axios.get(animePageUrl, { 
+    const response = await axios.get(animePageUrl, {
       headers: HEADERS,
-      timeout: 15000
+      timeout: 30000,
+      maxRedirects: 5
     });
     const html = response.data;
 
@@ -330,9 +340,10 @@ async function getAnimeDetails(id) {
 // Obtener enlaces de video de un episodio
 async function getEpisodeLinks(url) {
   try {
-    const resp = await axios.get(url, { 
+    const resp = await axios.get(url, {
       headers: HEADERS,
-      timeout: 15000
+      timeout: 30000,
+      maxRedirects: 5
     });
     const html = resp.data;
 

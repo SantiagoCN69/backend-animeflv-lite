@@ -3,6 +3,20 @@ const axios = require('axios');
 
 const BASE_URL = 'https://jkanime.net';
 
+// Headers para simular un navegador real y evitar bloqueos
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Cache-Control': 'max-age=0'
+};
+
 // Normalizar título para comparación (eliminar espacios, acentos, etc.)
 function normalizeTitle(title) {
   return title.toLowerCase()
@@ -15,12 +29,9 @@ function normalizeTitle(title) {
 async function getLatestEpisodes() {
     try {
         const response = await axios.get(BASE_URL, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
-            },
-            timeout: 15000
+            headers: HEADERS,
+            timeout: 30000,
+            maxRedirects: 5
         });
 
         const $ = cheerio.load(response.data);
@@ -82,15 +93,9 @@ async function getLatestEpisodes() {
 async function getEstrenos() {
   try {
     const response = await axios.get(`${BASE_URL}/estrenos/`, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-        "Accept":
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Referer": "https://jkanime.net/"
-      },
-      timeout: 15000
+      headers: { ...HEADERS, 'Referer': BASE_URL },
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const $ = cheerio.load(response.data);
@@ -164,10 +169,9 @@ async function getEstrenos() {
 async function search(query) {
   try {
     const response = await axios.get(`${BASE_URL}/buscar/${query}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      },
-      timeout: 15000
+      headers: HEADERS,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const $ = cheerio.load(response.data);
@@ -209,10 +213,9 @@ async function browse(params) {
     const url = `${BASE_URL}/directorio/?${params}`;
 
     const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      },
-      timeout: 15000
+      headers: HEADERS,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const html = response.data;
@@ -262,10 +265,9 @@ async function browse(params) {
 async function getAnimeDetails(id) {
   try {
     const response = await axios.get(`${BASE_URL}/${id}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      },
-      timeout: 15000
+      headers: HEADERS,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const $ = cheerio.load(response.data);
@@ -375,8 +377,9 @@ async function getAnimeDetails(id) {
         try {
           // Petición al paginador interno
           const ajaxRes = await axios.get(`${BASE_URL}/ajax/pagination_episodes/${internalId}/1/`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            timeout: 15000
+            headers: { ...HEADERS, 'X-Requested-With': 'XMLHttpRequest' },
+            timeout: 30000,
+            maxRedirects: 5
           });
           
           if (ajaxRes.data && Array.isArray(ajaxRes.data)) {
@@ -479,11 +482,9 @@ async function getEpisodeLinks(url) {
   try {
 
     const response = await axios.get(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      },
-      timeout: 15000
+      headers: HEADERS,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const $ = cheerio.load(response.data);
@@ -564,13 +565,12 @@ async function getEpisodeLinks(url) {
 async function getSchedule() {
   try {
     // URL del horario de JKAnime
-    const url = `${BASE_URL}/horario/`; 
-    
+    const url = `${BASE_URL}/horario/`;
+
     const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      },
-      timeout: 15000
+      headers: HEADERS,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const html = response.data;
