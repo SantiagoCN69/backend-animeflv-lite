@@ -1,20 +1,7 @@
 const cheerio = require('cheerio');
 const axios = require('axios');
-require('dotenv').config();
+
 const BASE_URL = 'https://jkanime.net';
-
-// Configuración de APIs de Proxy Residencial (Nivel Gratuito)
-const PROXY_CONFIG = {
-  // ScraperAPI: 5,000 peticiones gratuitas
-  scraperAPI: process.env.SCRAPER_API_KEY || null,
-  // ZenRows: 1,000 créditos gratuitos al mes
-  zenRows: process.env.ZENROWS_API_KEY || null,
-  // ScrapeOps: Proxy aggregator con capa gratuita
-  scrapeOps: process.env.SCRAPEOPS_API_KEY || null
-};
-
-// Indicador de si debemos usar proxy (automático en entornos cloud)
-const USE_PROXY = process.env.USE_PROXY === 'true' || process.env.VERCEL === '1' || process.env.RENDER === '1';
 
 // Cache simple en memoria para reducir peticiones repetidas
 const cache = new Map();
@@ -55,22 +42,7 @@ const axiosConfig = {
   }
 };
 
-// Función para obtener URL con proxy residencial
-function getProxyUrl(targetUrl) {
-  // Prioridad: ScraperAPI > ZenRows > ScrapeOps
-  if (PROXY_CONFIG.scraperAPI) {
-    return `http://api.scraperapi.com?api_key=${PROXY_CONFIG.scraperAPI}&url=${encodeURIComponent(targetUrl)}&render=true`;
-  }
-  if (PROXY_CONFIG.zenRows) {
-    return `https://api.zenrows.com/v1/?apikey=${PROXY_CONFIG.zenRows}&url=${encodeURIComponent(targetUrl)}&css_selector=&premium_proxy=true`;
-  }
-  if (PROXY_CONFIG.scrapeOps) {
-    return `https://proxy.scrapeops.io/v1/?api_key=${PROXY_CONFIG.scrapeOps}&url=${encodeURIComponent(targetUrl)}&render_js=true`;
-  }
-  return null;
-}
-
-// Función helper optimizada con cache y soporte para proxy
+// Función helper optimizada con cache
 async function fetchWithCache(url) {
   const cached = getCached(url);
   if (cached) {
@@ -78,26 +50,7 @@ async function fetchWithCache(url) {
   }
 
   try {
-    let response;
-
-    // Si estamos en cloud y tenemos configuración de proxy, usar proxy
-    if (USE_PROXY) {
-      const proxyUrl = getProxyUrl(url);
-      if (proxyUrl) {
-        console.log(`🔄 Usando proxy residencial para: ${url}`);
-        response = await axios.get(proxyUrl, {
-          ...axiosConfig,
-          timeout: 30000 // Mayor timeout para proxy
-        });
-      } else {
-        console.log(`⚠️ USE_PROXY activado pero no hay API key configurada, usando directo`);
-        response = await axios.get(url, axiosConfig);
-      }
-    } else {
-      // Modo local o sin proxy
-      response = await axios.get(url, axiosConfig);
-    }
-
+    const response = await axios.get(url, axiosConfig);
     if (response.status === 200 && response.data) {
       setCache(url, response);
       return response;
@@ -726,8 +679,5 @@ module.exports = {
   getEpisodeLinks,
   normalizeTitle,
   BASE_URL,
-  getSchedule,
-  testProxyConfiguration,
-  USE_PROXY,
-  PROXY_CONFIG
+  getSchedule
 };
