@@ -2,97 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const animeav1 = require('./sources/animeav1');
-const jkanime = require('./sources/jkanime');
 
 app.use(cors());
 
-// Función auxiliar para normalizar títulos y hacer una comparación exacta
-function normalizeTitleForCompare(title) {
-  if (!title) return '';
-  // Convierte a minúsculas y elimina todo lo que no sea letra o número (espacios, guiones, dos puntos, etc.)
-  return title.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-// Función optimizada para deduplicar y FUSIONAR animes por ID
-function deduplicateAnimes(animes) {
-  const seen = new Map();
-  
-  animes.forEach(anime => {
-    // Usamos el ID como clave principal para deduplicación
-    const key = anime.id || normalizeTitleForCompare(anime.title);
-    if (seen.has(key)) {
-      const existing = seen.get(key);
-      
-      // Fusionar campos faltantes con prioridad a datos no nulos
-      if (anime['cover-lasted']) {
-        // cover-lasted tiene prioridad absoluta sobre cover
-        existing.cover = anime['cover-lasted'];
-      } else if (anime.cover && !existing.cover) {
-        existing.cover = anime.cover;
-      }
-      // Asegurarse de que cover-lasted no aparezca en el resultado final
-      if (existing['cover-lasted']) {
-        delete existing['cover-lasted'];
-      }
-      if (anime.chapter && !existing.chapter) existing.chapter = anime.chapter;
-      if (anime.episode && !existing.episode) existing.episode = anime.episode;
-      if (anime.type && !existing.type) existing.type = anime.type;
-      if (anime.status && !existing.status) existing.status = anime.status;
-      if (anime.synopsis && !existing.synopsis) existing.synopsis = anime.synopsis;
-      if (anime.url && !existing.url) existing.url = anime.url;
-      if (anime.id && !existing.id) existing.id = anime.id;
-
-      // Fusionar servidores sin duplicados por URL (más confiable que por nombre)
-      if (anime.servidores) {
-        existing.servidores = existing.servidores || [];
-        const allServers = [...existing.servidores, ...anime.servidores];
-        existing.servidores = allServers.filter((server, index, self) =>
-          index === self.findIndex(s => s.url === server.url)
-        );
-      }
-    } else {
-      const newAnime = { ...anime };
-      // Si tiene cover-lasted, asignarlo a cover y eliminar cover-lasted
-      if (newAnime['cover-lasted']) {
-        newAnime.cover = newAnime['cover-lasted'];
-        delete newAnime['cover-lasted'];
-      }
-      seen.set(key, newAnime);
-    }
-  });
-  
-  return Array.from(seen.values());
-}
-
 // Últimos capítulos
 app.get('/api/latest', async (req, res) => {
-  const source = req.query.source || 'all';
   try {
-    let data;
-
-    if (source === 'animeav1') {
-      data = await animeav1.getLatestEpisodes();
-    } else if (source === 'jkanime') {
-      data = await jkanime.getLatestEpisodes();
-    } else {
-      const [jkanimeData, animeav1Data] = await Promise.allSettled([
-        jkanime.getLatestEpisodes(),
-        animeav1.getLatestEpisodes()
-      ]);
-
-      const results = [];
-
-      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
-        results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
-      }
-
-      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
-        results.push(...(Array.isArray(animeav1Data.value) ? animeav1Data.value : []));
-      }
-      
-      data = deduplicateAnimes(results);
-    }
-
+    const data = await animeav1.getLatestEpisodes();
     res.json(data);
   } catch (error) {
     console.error('Error en /api/latest:', error);
@@ -103,33 +19,9 @@ app.get('/api/latest', async (req, res) => {
 // Buscar anime
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
-  const source = req.query.source || 'all';
-  
+
   try {
-    let data;
-    if (source === 'animeav1') {
-      data = await animeav1.search(query);
-    } else if (source === 'jkanime') {
-      data = await jkanime.search(query);
-    } else {
-      // Buscar en todas las fuentes y combinar resultados
-      const [animeav1Data, jkanimeData] = await Promise.allSettled([
-        animeav1.search(query),
-        jkanime.search(query)
-      ]);
-      
-      const results = [];
-      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
-        // animeav1 devuelve {data: [...]} o array directo
-        const animeav1Results = animeav1Data.value.data || animeav1Data.value;
-        results.push(...(Array.isArray(animeav1Results) ? animeav1Results : []));
-      }
-      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
-        results.push(...(Array.isArray(jkanimeData.value) ? jkanimeData.value : []));
-      }
-      // Deduplicar resultados por título
-      data = deduplicateAnimes(results);
-    }
+    const data = await animeav1.search(query);
     res.json(data);
   } catch (error) {
     console.error('Error en /api/search:', error);
@@ -139,19 +31,10 @@ app.get('/api/search', async (req, res) => {
 
 // Navegar por animes
 app.get('/api/browse', async (req, res) => {
-  const source = req.query.source || 'jkanime';
   const params = req.url.split('?')[1];
-  
+
   try {
-    let data;
-    if (source === 'animeav1') {
-      data = await animeav1.browse(params);
-    } else if (source === 'jkanime') {
-      data = await jkanime.browse(params);
-    } else {
-      // Por defecto usar jkanime para browse
-      data = await jkanime.browse(params);
-    }
+    const data = await animeav1.browse(params);
     res.json(data);
   } catch (error) {
     console.error('Error en /api/browse:', error);
@@ -162,82 +45,14 @@ app.get('/api/browse', async (req, res) => {
 // Detalles de anime
 app.get('/api/anime', async (req, res) => {
   const id = req.query.id;
-  const source = req.query.source || 'all';
-  
+
   if (!id) {
     return res.status(400).json({ message: 'El ID del anime es requerido' });
   }
-  
+
   try {
-    let data;
-    
-    // Búsqueda por fuente específica
-    if (source === 'animeav1') {
-      data = await animeav1.getAnimeDetails(id);
-    } else if (source === 'jkanime') {
-      data = await jkanime.getAnimeDetails(id);
-    } else {
-      // Búsqueda combinada (all)
-      const [animeav1Data, jkanimeData] = await Promise.allSettled([
-        animeav1.getAnimeDetails(id),
-        jkanime.getAnimeDetails(id)
-      ]);
-      
-      const v1 = animeav1Data.status === 'fulfilled' ? animeav1Data.value : null;
-      const jk = jkanimeData.status === 'fulfilled' ? jkanimeData.value : null;
-
-      if (!v1 && !jk) {
-        return res.status(404).json({ message: 'Anime no encontrado en ninguna fuente' });
-      }
-
-      // 1. Unir datos básicos (priorizamos la fuente que los tenga)
-      const combined = {
-        id: id,
-        internalId: v1?.internalId || null,
-        title: v1?.title || jk?.title || id,
-        cover: jk?.cover || v1?.cover || '',
-        banner: jk?.banner || v1?.banner || '',
-        synopsis: v1?.synopsis || jk?.synopsis || 'Sinopsis no disponible.',
-        category: v1?.category || jk?.category || 'Desconocido',
-        status: v1?.status || jk?.status || 'Desconocido',
-        startDate: v1?.startDate || jk?.startDate || null,
-        endDate: v1?.endDate || jk?.endDate || null,
-        score: v1?.score || null, // Solo de animeav1 por ahora
-        relations: v1?.relations || jk?.relations || []
-      };
-
-      // 2. Fusionar géneros sin duplicados
-      const allGenres = [...(v1?.genres || []), ...(jk?.genres || [])];
-      combined.genres = [...new Set(allGenres)];
-
-      // 3. Fusionar episodios inteligentemente (sin duplicados por número)
-      const episodesMap = new Map();
-
-      // Agregamos primero los de JKAnime
-      if (jk?.episodes) {
-        jk.episodes.forEach(ep => {
-          episodesMap.set(ep.number.toString(), ep);
-        });
-      }
-
-      // Luego agregamos los de AnimeAV1
-      if (v1?.episodes) {
-        v1.episodes.forEach(ep => {
-          if (!episodesMap.has(ep.number.toString())) {
-            episodesMap.set(ep.number.toString(), ep);
-          }
-        });
-      }
-
-      // Convertimos el mapa de vuelta a un array y lo ordenamos numéricamente
-      combined.episodes = Array.from(episodesMap.values()).sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
-      
-      data = combined;
-    }
-    
-    // Devolver el JSON final
+    const data = await animeav1.getAnimeDetails(id);
     res.json(data);
-    
   } catch (error) {
     console.error('Error en /api/anime:', error);
     res.status(500).json({ error: error.message });
@@ -249,64 +64,15 @@ app.get('/api/anime', async (req, res) => {
 app.get('/api/episode', async (req, res) => {
   const animeid = req.query.animeid;
   const cap = req.query.cap;
-  const source = req.query.source || 'all';
-  
+
   if (!animeid || !cap) {
     return res.status(400).json({ error: 'Faltan los parámetros animeid y/o cap' });
   }
 
-  // Construimos dinámicamente las URLs según la estructura de cada página
-  const urlAnimeAv1 = `https://animeav1.com/media/${animeid}/${cap}`;
-  const urlJkAnime = `https://jkanime.net/${animeid}/${cap}/`;
-  
+  const url = `https://animeav1.com/media/${animeid}/${cap}`;
 
   try {
-    let data;
-    
-    if (source === 'animeav1') {
-      data = await animeav1.getEpisodeLinks(urlAnimeAv1);
-    } else if (source === 'jkanime') {
-      data = await jkanime.getEpisodeLinks(urlJkAnime);
-    } else {
-      // Buscar en ambas fuentes simultáneamente y unir servidores
-      const [animeav1Data, jkanimeData] = await Promise.allSettled([
-        animeav1.getEpisodeLinks(urlAnimeAv1),
-        jkanime.getEpisodeLinks(urlJkAnime)
-      ]);
-      
-      const results = [];
-      
-      // Procesar resultados de JKAnime (ahora los agregamos primero)
-      if (jkanimeData.status === 'fulfilled' && jkanimeData.value && jkanimeData.value.servidores) {
-        results.push(...jkanimeData.value.servidores);
-      }
-
-      // Procesar resultados de AnimeAV1 (ahora van después)
-      if (animeav1Data.status === 'fulfilled' && animeav1Data.value && animeav1Data.value.servidores) {
-        results.push(...animeav1Data.value.servidores);
-      }
-      
-      // Unir servidores únicos por URL para evitar duplicados (más confiable que por nombre)
-      const uniqueServers = [];
-      const seen = new Map();
-      
-      results.forEach(server => {
-        const key = server.url;
-        if (!seen.has(key)) {
-          seen.set(key, true);
-          uniqueServers.push(server);
-        }
-      });
-
-      if (uniqueServers.length === 0) {
-        throw new Error('No se encontraron enlaces de video en ninguna de las fuentes para este episodio.');
-      }
-      
-      data = {
-        video: uniqueServers[0]?.url,
-        servidores: uniqueServers
-      };
-    }
+    const data = await animeav1.getEpisodeLinks(url);
     res.json(data);
   } catch (error) {
     console.error('Error en /api/episode:', error);
@@ -314,93 +80,10 @@ app.get('/api/episode', async (req, res) => {
   }
 });
 
-// Ejemplo de unión de servidores (endpoint de prueba)
-app.get('/api/example/servers', async (req, res) => {
-  // Ejemplo simulado de cómo se unen los servidores
-  const exampleAnime = {
-    title: 'Naruto',
-    servidores: [
-      { name: 'mega', url: 'https://mega.nz/...' },
-      { name: 'fembed', url: 'https://fembed.com/...' }
-    ]
-  };
-
-  const duplicateAnime = {
-    title: 'Naruto',
-    servidores: [
-      { name: 'mega', url: 'https://mega.nz/...' }, // Duplicado
-      { name: 'streamtape', url: 'https://streamtape.com/...' } // Nuevo
-    ]
-  };
-
-  // Aplicar deduplicación y unión de servidores
-  const combined = deduplicateAnimes([exampleAnime, duplicateAnime]);
-
-  res.json({
-    mensaje: 'Ejemplo de unión de servidores con deduplicación',
-    original: [exampleAnime, duplicateAnime],
-    resultado: combined,
-    explicacion: 'Los servidores duplicados (mega) se eliminan, los únicos (fembed, streamtape) se unen'
-  });
-});
-
 // obtener los animes por horarios
 app.get('/api/schedule', async (req, res) => {
-  const source = req.query.source || 'all';
   try {
-    let data;
-
-    if (source === 'animeav1') {
-      data = await animeav1.getSchedule();
-    } else if (source === 'jkanime') {
-      data = await jkanime.getSchedule();
-    } else {
-      // Combinar horarios de ambas fuentes
-      const [jkanimeData, animeav1Data] = await Promise.allSettled([
-        jkanime.getSchedule(),
-        animeav1.getSchedule()
-      ]);
-
-      const results = [];
-
-      if (jkanimeData.status === 'fulfilled' && jkanimeData.value) {
-        const jkData = Array.isArray(jkanimeData.value) ? jkanimeData.value : [];
-        results.push(jkData);
-      }
-
-      if (animeav1Data.status === 'fulfilled' && animeav1Data.value) {
-        const av1Data = Array.isArray(animeav1Data.value) ? animeav1Data.value : [];
-        results.push(av1Data);
-      }
-
-      // Combinar por día de la semana
-      const daysOfWeek = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-      const combinedSchedule = [];
-
-      daysOfWeek.forEach(dayName => {
-        const dayAnimes = [];
-        
-        // Buscar animes de este día en ambas fuentes
-        results.forEach(sourceSchedule => {
-          if (Array.isArray(sourceSchedule)) {
-            const dayData = sourceSchedule.find(d => d.day === dayName);
-            if (dayData && dayData.animes && Array.isArray(dayData.animes)) {
-              dayAnimes.push(...dayData.animes);
-            }
-          }
-        });
-
-        if (dayAnimes.length > 0) {
-          combinedSchedule.push({
-            day: dayName,
-            animes: dayAnimes
-          });
-        }
-      });
-
-      data = combinedSchedule;
-    }
-
+    const data = await animeav1.getSchedule();
     res.json(data);
   } catch (error) {
     console.error('Error en /api/schedule:', error);
