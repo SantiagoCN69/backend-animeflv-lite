@@ -338,8 +338,7 @@ async function getAnimeDetails(id) {
         numMatches.forEach(m => {
           const epNum = m[1];
           formattedEpisodes.push({
-            number: epNum.toString(),
-            url: `${BASE_URL}/media/${id}/${epNum}`
+            number: epNum.toString()
           });
         });
         formattedEpisodes.sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
